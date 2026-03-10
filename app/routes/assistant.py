@@ -329,7 +329,8 @@ def _maybe_compress(conversation, api_base, api_key, model):
     if total < SUMMARY_THRESHOLD:
         return
 
-    all_msgs = conversation.messages.order_by(ChatMessage.created_at.asc()).all()
+    all_msgs = ChatMessage.query.filter_by(conversation_id=conversation.id) \
+        .order_by(ChatMessage.created_at.asc(), ChatMessage.id.asc()).all()
     msgs_to_summarize = all_msgs[:max(0, len(all_msgs) - CONTEXT_WINDOW)]
     if len(msgs_to_summarize) < 4:
         return
@@ -398,7 +399,8 @@ def assistant_page():
     messages = []
     if current_conv:
         messages = [m.to_dict() for m in
-                    current_conv.messages.order_by(ChatMessage.created_at.asc()).all()]
+                    ChatMessage.query.filter_by(conversation_id=current_conv.id)
+                    .order_by(ChatMessage.created_at.asc(), ChatMessage.id.asc()).all()]
 
     return render_template('assistant/chat.html',
                            llm_provider=llm_provider,
@@ -462,7 +464,8 @@ def get_messages(conv_id):
     if not conv:
         return jsonify({'error': '对话不存在'}), 404
     messages = [m.to_dict() for m in
-                conv.messages.order_by(ChatMessage.created_at.asc()).all()]
+                ChatMessage.query.filter_by(conversation_id=conv.id)
+                .order_by(ChatMessage.created_at.asc(), ChatMessage.id.asc()).all()]
     return jsonify({'messages': messages, 'summary': conv.summary or ''})
 
 
@@ -552,10 +555,13 @@ def send_message():
         system_prompt = _build_system_prompt(conv, extra_context)
         llm_messages = [{'role': 'system', 'content': system_prompt}]
 
-        # Context window: last N messages
-        recent = conv.messages.order_by(ChatMessage.created_at.desc()) \
-            .limit(CONTEXT_WINDOW).all()
-        recent.reverse()
+        # Context window: last N messages (use fresh query to include the just-saved user message)
+        db.session.expire_all()  # ensure we see the latest committed data
+        recent = ChatMessage.query.filter_by(conversation_id=conv.id) \
+            .order_by(ChatMessage.created_at.asc(), ChatMessage.id.asc()) \
+            .all()
+        # Take only the last CONTEXT_WINDOW messages
+        recent = recent[-CONTEXT_WINDOW:] if len(recent) > CONTEXT_WINDOW else recent
         for m in recent:
             llm_messages.append({'role': m.role, 'content': m.content})
 

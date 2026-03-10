@@ -1,0 +1,95 @@
+{% extends "base.html" %}
+{% block title %}管理后台 - 智能知识库{% endblock %}
+{% block page_title %}管理后台{% endblock %}
+
+{% block content %}
+<div class="stats">
+    <div class="stat">
+        <div class="stat-icon purple"><i class="ri-user-3-line"></i></div>
+        <div><div class="stat-val">{{ user_count }}</div><div class="stat-label">注册用户</div></div>
+    </div>
+    <div class="stat">
+        <div class="stat-icon green"><i class="ri-book-2-line"></i></div>
+        <div><div class="stat-val">{{ note_count }}</div><div class="stat-label">笔记总数</div></div>
+    </div>
+    <div class="stat">
+        <div class="stat-icon blue"><i class="ri-bar-chart-line"></i></div>
+        <div><div class="stat-val">{{ activity_count }}</div><div class="stat-label">活动记录</div></div>
+    </div>
+</div>
+
+<div class="grid-2">
+    <div>
+        <div class="card" style="margin-bottom:20px;">
+            <div class="card-title"><i class="ri-robot-2-line"></i> 大模型配置</div>
+            <p style="font-size:12px;color:var(--text-secondary);margin-bottom:14px;">配置后所有用户统一使用此大模型。支持 OpenAI 兼容格式的 API。</p>
+            <form method="POST" action="{{ url_for('admin.llm_settings') }}">
+                <div class="form-group">
+                    <label class="form-label">模型提供商</label>
+                    <select name="llm_provider" class="form-select" id="llmP" onchange="updateHint()">
+                        <option value="">-- 选择 --</option>
+                        <option value="openai" {{ 'selected' if llm_provider=='openai' }}>OpenAI</option>
+                        <option value="deepseek" {{ 'selected' if llm_provider=='deepseek' }}>DeepSeek</option>
+                        <option value="zhipu" {{ 'selected' if llm_provider=='zhipu' }}>智谱 (ChatGLM)</option>
+                        <option value="moonshot" {{ 'selected' if llm_provider=='moonshot' }}>Moonshot (Kimi)</option>
+                        <option value="qwen" {{ 'selected' if llm_provider=='qwen' }}>通义千问 (Qwen)</option>
+                        <option value="other" {{ 'selected' if llm_provider=='other' }}>其他 (自定义)</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">模型名称</label>
+                    <input type="text" name="llm_model" class="form-input" value="{{ llm_model }}" placeholder="如: gpt-4o, deepseek-chat">
+                    <p style="font-size:11px;color:var(--text-muted);margin-top:3px;" id="hint"></p>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">API Key</label>
+                    <input type="password" name="llm_api_key" class="form-input" value="{{ llm_api_key }}" placeholder="输入 API Key">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">API Base URL <span style="color:var(--text-muted);font-weight:400;">(可选)</span></label>
+                    <input type="text" name="llm_api_base" class="form-input" value="{{ llm_api_base }}" placeholder="留空使用默认地址">
+                </div>
+                <button type="submit" class="btn btn-primary"><i class="ri-save-line"></i> 保存设置</button>
+            </form>
+        </div>
+    </div>
+    <div>
+        <div class="card">
+            <div class="card-title"><i class="ri-team-line"></i> 用户管理</div>
+            <div style="overflow-x:auto;">
+                <table>
+                    <thead><tr><th>用户</th><th>角色</th><th>场景</th><th>最近登录</th><th>操作</th></tr></thead>
+                    <tbody>
+                    {% for u in users %}
+                    <tr>
+                        <td>
+                            <div style="display:flex;align-items:center;gap:8px;">
+                                <div class="user-avatar" style="width:26px;height:26px;font-size:11px;">{{ u.username[0].upper() }}</div>
+                                <span style="font-weight:500;font-size:13px;">{{ u.username }}</span>
+                            </div>
+                        </td>
+                        <td><span class="tag {{ 'tag-admin' if u.is_admin else 'tag-user' }}">{{ '管理员' if u.is_admin else '用户' }}</span></td>
+                        <td style="font-size:12px;">{{ {'work':'工作','study':'学习','life':'生活','general':'通用'}.get(u.scene or 'general', '通用') }}</td>
+                        <td style="font-size:12px;color:var(--text-muted);">{{ u.last_login.strftime('%m-%d %H:%M') if u.last_login else '从未' }}</td>
+                        <td>
+                            {% if not u.is_admin %}
+                            <a href="{{ url_for('admin.user_detail', user_id=u.id) }}" class="btn btn-ghost btn-sm"><i class="ri-eye-line"></i></a>
+                            {% else %}<span style="font-size:11px;color:var(--text-muted);">-</span>{% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const hints = {openai:'推荐: gpt-4o, gpt-4o-mini',deepseek:'推荐: deepseek-chat, deepseek-reasoner',zhipu:'推荐: glm-4, glm-4-flash',moonshot:'推荐: moonshot-v1-8k',qwen:'推荐: qwen-turbo, qwen-plus, qwen-max',other:'请输入模型名称'};
+function updateHint(){document.getElementById('hint').textContent=hints[document.getElementById('llmP').value]||'';}
+updateHint();
+</script>
+{% endblock %}

@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+{% block title %}用户: {{ target_user.username }}{% endblock %}
+{% block page_title %}用户详情: {{ target_user.username }}{% endblock %}
+
+{% block top_actions %}
+<a href="{{ url_for('admin.admin_dashboard') }}" class="btn btn-ghost"><i class="ri-arrow-left-line"></i> 返回</a>
+{% endblock %}
+
+{% block content %}
+<div class="grid-2">
+    <div>
+        <div class="card" style="margin-bottom:20px;">
+            <div class="card-title"><i class="ri-user-3-line"></i> 用户信息</div>
+            <table>
+                <tr><td style="font-weight:500;width:90px;font-size:13px;">用户名</td><td style="font-size:13px;">{{ target_user.username }}</td></tr>
+                <tr><td style="font-weight:500;font-size:13px;">场景</td><td style="font-size:13px;">{{ {'work':'上班族','study':'学生','life':'生活','general':'通用'}.get(target_user.scene or 'general', '通用') }}</td></tr>
+                <tr><td style="font-weight:500;font-size:13px;">注册</td><td style="font-size:13px;">{{ target_user.created_at.strftime('%Y-%m-%d %H:%M') if target_user.created_at else '-' }}</td></tr>
+                <tr><td style="font-weight:500;font-size:13px;">最近登录</td><td style="font-size:13px;">{{ target_user.last_login.strftime('%Y-%m-%d %H:%M') if target_user.last_login else '从未' }}</td></tr>
+                <tr><td style="font-weight:500;font-size:13px;">兴趣</td><td>{% if target_user.interests %}{% for i in target_user.interests.split(',') %}{% if i.strip() %}<span class="tag tag-topic" style="margin:2px;">{{ i.strip() }}</span>{% endif %}{% endfor %}{% else %}<span style="font-size:13px;color:var(--text-muted);">无</span>{% endif %}</td></tr>
+                <tr><td style="font-weight:500;font-size:13px;">在学</td><td>{% if target_user.current_learning %}{% for t in target_user.current_learning.split(',') %}{% if t.strip() %}<span class="tag" style="background:rgba(16,185,129,0.15);color:#34d399;margin:2px;">{{ t.strip() }}</span>{% endif %}{% endfor %}{% else %}<span style="font-size:13px;color:var(--text-muted);">无</span>{% endif %}</td></tr>
+            </table>
+        </div>
+        <div class="card" style="margin-bottom:20px;">
+            <div class="card-title"><i class="ri-settings-4-line"></i> 管理操作</div>
+            <form method="POST" action="{{ url_for('admin.reset_user_password', user_id=target_user.id) }}" style="margin-bottom:14px;">
+                <div style="display:flex;gap:8px;">
+                    <input type="password" name="new_password" class="form-input" placeholder="新密码（至少6位）" minlength="6" required style="flex:1;">
+                    <button type="submit" class="btn btn-ghost"><i class="ri-lock-2-line"></i> 重置密码</button>
+                </div>
+            </form>
+            <form method="POST" action="{{ url_for('admin.delete_user', user_id=target_user.id) }}" onsubmit="return confirm('确定删除 {{ target_user.username }} ？不可恢复！')">
+                <button type="submit" class="btn btn-danger"><i class="ri-delete-bin-line"></i> 删除用户</button>
+            </form>
+        </div>
+        <div class="card">
+            <div class="card-title"><i class="ri-book-2-line"></i> 笔记 ({{ notes|length }})</div>
+            {% for n in notes %}
+            <div style="padding:8px 0;border-bottom:1px solid var(--border);font-size:13px;">
+                <span style="font-weight:500;">{{ n.title }}</span>
+                <span style="color:var(--text-muted);float:right;">{{ n.updated_at.strftime('%m-%d') }}</span>
+            </div>
+            {% else %}<p style="font-size:13px;color:var(--text-muted);padding:12px 0;">无</p>{% endfor %}
+        </div>
+    </div>
+    <div>
+        <div class="card">
+            <div class="card-title"><i class="ri-history-line"></i> 活动 (最近50条)</div>
+            {% for a in activities %}
+            <div class="act-item">
+                <div class="act-icon {% if 'created' in a.activity_type %}create{% elif 'edited' in a.activity_type %}edit{% elif 'viewed' in a.activity_type %}view{% elif 'search' in a.activity_type %}search{% elif 'ai' in a.activity_type %}ai{% elif 'collect' in a.activity_type %}collect{% else %}other{% endif %}">
+                    <i class="ri-{% if 'created' in a.activity_type %}add{% elif 'edited' in a.activity_type %}edit{% elif 'viewed' in a.activity_type %}eye{% elif 'search' in a.activity_type %}search{% elif 'ai' in a.activity_type %}robot{% elif 'collect' in a.activity_type %}link{% else %}record-circle{% endif %}-line"></i>
+                </div>
+                <div style="flex:1;"><div class="act-text">{{ a.content }}</div><div class="act-time">{{ a.created_at.strftime('%Y-%m-%d %H:%M') }}</div></div>
+            </div>
+            {% else %}<p style="font-size:13px;color:var(--text-muted);padding:12px 0;">无</p>{% endfor %}
+        </div>
+    </div>
+</div>
+{% endblock %}

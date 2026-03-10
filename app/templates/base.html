@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}智能知识库{% endblock %}</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/remixicon@4.1.0/fonts/remixicon.css" rel="stylesheet">
+    <style>
+        :root {
+            --bg: #0f1117;
+            --bg-card: #1a1c25;
+            --bg-hover: #22252f;
+            --bg-input: #14161e;
+            --border: #2a2d38;
+            --border-focus: #6366f1;
+            --text: #e2e8f0;
+            --text-secondary: #94a3b8;
+            --text-muted: #64748b;
+            --accent: #6366f1;
+            --accent-hover: #818cf8;
+            --accent-glow: rgba(99,102,241,0.15);
+            --success: #10b981;
+            --error: #ef4444;
+            --warning: #f59e0b;
+            --info: #3b82f6;
+            --radius: 12px;
+            --radius-sm: 8px;
+        }
+        * { margin:0; padding:0; box-sizing:border-box; }
+        body {
+            font-family: 'Inter', -apple-system, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+            line-height: 1.6;
+        }
+        a { color: var(--accent-hover); text-decoration: none; }
+
+        /* Sidebar */
+        .sidebar {
+            position: fixed; left:0; top:0; bottom:0; width:240px;
+            background: var(--bg-card);
+            border-right: 1px solid var(--border);
+            display: flex; flex-direction: column;
+            z-index: 100;
+        }
+        .sidebar-header {
+            padding: 20px 16px 14px;
+            border-bottom: 1px solid var(--border);
+        }
+        .sidebar-logo {
+            display:flex; align-items:center; gap:10px;
+            text-decoration:none; color:var(--text);
+        }
+        .sidebar-logo i { font-size:24px; color:var(--accent); }
+        .sidebar-logo span { font-size:15px; font-weight:700; }
+        .sidebar-nav { flex:1; padding:12px 8px; overflow-y:auto; }
+        .nav-section { margin-bottom:20px; }
+        .nav-section-title {
+            font-size:10px; font-weight:600; text-transform:uppercase;
+            letter-spacing:0.8px; color:var(--text-muted); padding:0 10px; margin-bottom:6px;
+        }
+        .nav-link {
+            display:flex; align-items:center; gap:10px;
+            padding:9px 12px; border-radius:var(--radius-sm);
+            color:var(--text-secondary); text-decoration:none;
+            font-size:13px; font-weight:500; transition:all 0.15s;
+        }
+        .nav-link:hover { background:var(--bg-hover); color:var(--text); }
+        .nav-link.active { background:var(--accent-glow); color:var(--accent-hover); }
+        .nav-link i { font-size:17px; width:20px; text-align:center; }
+        .sidebar-footer { padding:12px 8px; border-top:1px solid var(--border); }
+        .user-card {
+            display:flex; align-items:center; gap:10px;
+            padding:10px; border-radius:var(--radius-sm); background:var(--bg);
+        }
+        .user-avatar {
+            width:32px; height:32px; border-radius:50%;
+            background:var(--accent); color:white;
+            display:flex; align-items:center; justify-content:center;
+            font-weight:600; font-size:13px;
+        }
+        .user-info { flex:1; min-width:0; }
+        .user-name { font-size:12px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+        .user-role { font-size:10px; color:var(--text-muted); }
+
+        /* Main */
+        .main { margin-left:240px; min-height:100vh; }
+        .top-bar {
+            position:sticky; top:0; z-index:50;
+            background:rgba(15,17,23,0.85); backdrop-filter:blur(12px);
+            border-bottom:1px solid var(--border);
+            padding:14px 28px; display:flex; align-items:center; justify-content:space-between;
+        }
+        .page-title { font-size:18px; font-weight:700; }
+        .top-actions { display:flex; gap:10px; align-items:center; }
+        .content { padding:28px; max-width:1200px; }
+
+        /* Cards */
+        .card {
+            background:var(--bg-card); border:1px solid var(--border);
+            border-radius:var(--radius); padding:22px;
+        }
+        .card-title {
+            font-size:14px; font-weight:600; margin-bottom:14px;
+            display:flex; align-items:center; gap:8px; color:var(--text);
+        }
+        .card-title i { color:var(--accent); font-size:16px; }
+
+        /* Stats */
+        .stats { display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:16px; margin-bottom:28px; }
+        .stat {
+            background:var(--bg-card); border:1px solid var(--border);
+            border-radius:var(--radius); padding:18px 20px;
+            display:flex; align-items:center; gap:14px;
+        }
+        .stat-icon {
+            width:42px; height:42px; border-radius:10px;
+            display:flex; align-items:center; justify-content:center; font-size:20px;
+        }
+        .stat-icon.purple { background:rgba(99,102,241,0.15); color:#818cf8; }
+        .stat-icon.green { background:rgba(16,185,129,0.15); color:#34d399; }
+        .stat-icon.blue { background:rgba(59,130,246,0.15); color:#60a5fa; }
+        .stat-icon.orange { background:rgba(245,158,11,0.15); color:#fbbf24; }
+        .stat-icon.pink { background:rgba(236,72,153,0.15); color:#f472b6; }
+        .stat-val { font-size:24px; font-weight:700; }
+        .stat-label { font-size:12px; color:var(--text-secondary); }
+
+        /* Buttons */
+        .btn {
+            display:inline-flex; align-items:center; gap:6px;
+            padding:8px 16px; border-radius:var(--radius-sm);
+            font-size:13px; font-weight:500; border:none; cursor:pointer;
+            text-decoration:none; transition:all 0.15s; white-space:nowrap;
+        }
+        .btn-primary { background:var(--accent); color:white; }
+        .btn-primary:hover { background:var(--accent-hover); }
+        .btn-ghost { background:transparent; color:var(--text-secondary); border:1px solid var(--border); }
+        .btn-ghost:hover { background:var(--bg-hover); color:var(--text); }
+        .btn-danger { background:rgba(239,68,68,0.12); color:#f87171; border:1px solid rgba(239,68,68,0.2); }
+        .btn-danger:hover { background:rgba(239,68,68,0.2); }
+        .btn-sm { padding:6px 12px; font-size:12px; }
+        .btn-lg { padding:11px 22px; font-size:14px; }
+
+        /* Forms */
+        .form-group { margin-bottom:18px; }
+        .form-label { display:block; font-size:13px; font-weight:500; margin-bottom:5px; color:var(--text-secondary); }
+        .form-input, .form-select, .form-textarea {
+            width:100%; padding:10px 14px;
+            border:1px solid var(--border); border-radius:var(--radius-sm);
+            font-size:13px; font-family:inherit;
+            color:var(--text); background:var(--bg-input);
+            transition:border-color 0.15s;
+        }
+        .form-input:focus, .form-select:focus, .form-textarea:focus {
+            outline:none; border-color:var(--border-focus);
+            box-shadow:0 0 0 3px var(--accent-glow);
+        }
+        .form-textarea { min-height:180px; resize:vertical; line-height:1.7; }
+
+        /* Flash Messages */
+        .flash-wrap { position:fixed; top:16px; right:16px; z-index:1000; display:flex; flex-direction:column; gap:8px; }
+        .flash {
+            padding:10px 18px; border-radius:var(--radius-sm);
+            font-size:13px; font-weight:500; box-shadow:0 4px 20px rgba(0,0,0,0.3);
+            display:flex; align-items:center; gap:8px;
+            animation:slideIn 0.3s ease; cursor:pointer;
+        }
+        .flash.success { background:#065f46; color:#a7f3d0; border:1px solid #10b981; }
+        .flash.error { background:#7f1d1d; color:#fca5a5; border:1px solid #ef4444; }
+        .flash.info { background:#1e3a5f; color:#93c5fd; border:1px solid #3b82f6; }
+        .flash.warning { background:#78350f; color:#fde68a; border:1px solid #f59e0b; }
+        @keyframes slideIn { from{transform:translateX(100%);opacity:0;} to{transform:translateX(0);opacity:1;} }
+
+        /* Table */
+        table { width:100%; border-collapse:collapse; }
+        th, td { padding:10px 14px; text-align:left; border-bottom:1px solid var(--border); font-size:13px; }
+        th { font-weight:600; color:var(--text-muted); font-size:11px; text-transform:uppercase; letter-spacing:0.5px; }
+        tr:hover td { background:var(--bg-hover); }
+
+        /* Tags */
+        .tag {
+            display:inline-flex; padding:2px 10px; border-radius:20px;
+            font-size:11px; font-weight:500;
+        }
+        .tag-admin { background:rgba(245,158,11,0.15); color:#fbbf24; }
+        .tag-user { background:rgba(59,130,246,0.15); color:#60a5fa; }
+        .tag-topic { background:var(--accent-glow); color:var(--accent-hover); }
+        .tag-work { background:rgba(59,130,246,0.15); color:#60a5fa; }
+        .tag-study { background:rgba(16,185,129,0.15); color:#34d399; }
+        .tag-life { background:rgba(236,72,153,0.15); color:#f472b6; }
+        .tag-video { background:rgba(239,68,68,0.15); color:#f87171; }
+        .tag-article { background:rgba(99,102,241,0.15); color:#818cf8; }
+        .tag-done { background:rgba(16,185,129,0.15); color:#34d399; }
+        .tag-pending { background:rgba(245,158,11,0.15); color:#fbbf24; }
+        .tag-error { background:rgba(239,68,68,0.15); color:#f87171; }
+
+        /* Note Cards */
+        .notes-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(280px,1fr)); gap:14px; }
+        .note-card {
+            background:var(--bg-card); border:1px solid var(--border);
+            border-radius:var(--radius); padding:18px;
+            transition:all 0.15s; text-decoration:none; color:inherit; display:block;
+        }
+        .note-card:hover { border-color:var(--accent); box-shadow:0 0 20px var(--accent-glow); }
+        .note-card-title { font-size:14px; font-weight:600; margin-bottom:6px; }
+        .note-card-excerpt { font-size:12px; color:var(--text-secondary); line-height:1.5; display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden; }
+        .note-card-meta { display:flex; align-items:center; gap:10px; margin-top:10px; font-size:11px; color:var(--text-muted); flex-wrap:wrap; }
+
+        /* Grid layout */
+        .grid-2 { display:grid; grid-template-columns:1fr 1fr; gap:22px; }
+        @media(max-width:900px) { .grid-2{grid-template-columns:1fr;} }
+
+        /* Markdown */
+        .md-body { font-size:14px; line-height:1.8; }
+        .md-body h1,.md-body h2,.md-body h3 { margin:20px 0 10px; font-weight:600; }
+        .md-body h1{font-size:22px;} .md-body h2{font-size:18px;} .md-body h3{font-size:15px;}
+        .md-body p{margin-bottom:10px;}
+        .md-body pre{background:#0d0f14;color:#e2e8f0;padding:14px;border-radius:8px;overflow-x:auto;margin:14px 0;}
+        .md-body code{font-family:Consolas,monospace;font-size:0.9em;}
+        .md-body :not(pre)>code{background:var(--bg);padding:2px 6px;border-radius:4px;}
+        .md-body ul,ol{padding-left:22px;margin-bottom:10px;}
+        .md-body blockquote{border-left:3px solid var(--accent);padding-left:14px;margin:14px 0;color:var(--text-secondary);}
+        .md-body table{border-collapse:collapse;margin:14px 0;}
+        .md-body table th,.md-body table td{border:1px solid var(--border);padding:8px 12px;}
+
+        /* Chat */
+        .chat-box { border:1px solid var(--border); border-radius:var(--radius); overflow:hidden; background:var(--bg-card); display:flex; flex-direction:column; height:calc(100vh - 120px); }
+        .chat-msgs { flex:1; overflow-y:auto; padding:20px; display:flex; flex-direction:column; gap:14px; }
+        .chat-msg { max-width:80%; padding:12px 16px; border-radius:var(--radius-sm); font-size:13px; line-height:1.7; white-space:pre-wrap; word-break:break-word; }
+        .chat-msg.user { align-self:flex-end; background:var(--accent); color:white; border-bottom-right-radius:4px; }
+        .chat-msg.ai { align-self:flex-start; background:var(--bg); border:1px solid var(--border); border-bottom-left-radius:4px; }
+        .chat-input-bar { display:flex; gap:8px; padding:14px; border-top:1px solid var(--border); background:var(--bg); }
+        .chat-input-bar input { flex:1; padding:10px 14px; border:1px solid var(--border); border-radius:8px; font-size:13px; font-family:inherit; background:var(--bg-card); color:var(--text); }
+        .chat-input-bar input:focus { outline:none; border-color:var(--accent); }
+
+        /* Activity */
+        .act-item { display:flex; align-items:flex-start; gap:10px; padding:10px 0; border-bottom:1px solid var(--border); }
+        .act-item:last-child { border-bottom:none; }
+        .act-icon { width:28px; height:28px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:13px; flex-shrink:0; }
+        .act-icon.create{background:rgba(16,185,129,0.15);color:#34d399;}
+        .act-icon.edit{background:rgba(59,130,246,0.15);color:#60a5fa;}
+        .act-icon.view{background:rgba(139,92,246,0.15);color:#a78bfa;}
+        .act-icon.search{background:rgba(245,158,11,0.15);color:#fbbf24;}
+        .act-icon.ai{background:rgba(236,72,153,0.15);color:#f472b6;}
+        .act-icon.collect{background:rgba(99,102,241,0.15);color:#818cf8;}
+        .act-icon.other{background:var(--bg);color:var(--text-muted);}
+        .act-text{font-size:12px;} .act-time{font-size:11px;color:var(--text-muted);margin-top:2px;}
+
+        /* Topic bars */
+        .topic-bar { display:flex; align-items:center; gap:10px; margin-bottom:8px; }
+        .topic-name { font-size:12px; font-weight:500; min-width:80px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+        .topic-track { flex:1; height:6px; background:var(--bg); border-radius:3px; overflow:hidden; }
+        .topic-fill { height:100%; background:var(--accent); border-radius:3px; }
+        .topic-count { font-size:11px; color:var(--text-muted); min-width:24px; text-align:right; }
+
+        /* Empty */
+        .empty { text-align:center; padding:50px 20px; color:var(--text-muted); }
+        .empty i { font-size:40px; margin-bottom:12px; display:block; }
+        .empty h3 { font-size:16px; font-weight:600; color:var(--text-secondary); margin-bottom:6px; }
+
+        /* Spinner */
+        .spinner { display:inline-block; width:14px; height:14px; border:2px solid rgba(255,255,255,0.3); border-top-color:white; border-radius:50%; animation:spin 0.6s linear infinite; }
+        @keyframes spin { to{transform:rotate(360deg);} }
+
+        /* Collection card */
+        .collect-card {
+            background:var(--bg-card); border:1px solid var(--border);
+            border-radius:var(--radius); padding:16px; margin-bottom:12px;
+            transition:border-color 0.15s;
+        }
+        .collect-card:hover { border-color:var(--accent); }
+
+        /* Quick add bar */
+        .quick-add {
+            display:flex; gap:10px; padding:16px 20px;
+            background:var(--bg-card); border:1px solid var(--border);
+            border-radius:var(--radius); margin-bottom:20px;
+        }
+        .quick-add input { flex:1; }
+    </style>
+    {% block extra_css %}{% endblock %}
+</head>
+<body>
+    {% if current_user.is_authenticated %}
+    <aside class="sidebar">
+        <div class="sidebar-header">
+            <a href="{{ url_for('main.dashboard') }}" class="sidebar-logo">
+                <i class="ri-brain-line"></i>
+                <span>智能知识库</span>
+            </a>
+        </div>
+        <nav class="sidebar-nav">
+            <div class="nav-section">
+                <div class="nav-section-title">主要功能</div>
+                <a href="{{ url_for('main.dashboard') }}" class="nav-link {% if request.endpoint == 'main.dashboard' %}active{% endif %}">
+                    <i class="ri-dashboard-line"></i> 仪表盘
+                </a>
+                <a href="{{ url_for('collect.collection_list') }}" class="nav-link {% if request.endpoint and 'collect' in request.endpoint %}active{% endif %}">
+                    <i class="ri-link"></i> 智能收集
+                </a>
+                <a href="{{ url_for('notes.note_list') }}" class="nav-link {% if request.endpoint and 'notes' in request.endpoint %}active{% endif %}">
+                    <i class="ri-book-2-line"></i> 知识库
+                </a>
+                <a href="{{ url_for('assistant.assistant_page') }}" class="nav-link {% if request.endpoint and 'assistant' in request.endpoint %}active{% endif %}">
+                    <i class="ri-robot-2-line"></i> AI 助手
+                </a>
+            </div>
+            <div class="nav-section">
+                <div class="nav-section-title">个人</div>
+                <a href="{{ url_for('main.profile') }}" class="nav-link {% if request.endpoint == 'main.profile' %}active{% endif %}">
+                    <i class="ri-user-3-line"></i> 个人资料
+                </a>
+                <a href="{{ url_for('auth.change_password') }}" class="nav-link {% if request.endpoint == 'auth.change_password' %}active{% endif %}">
+                    <i class="ri-lock-2-line"></i> 修改密码
+                </a>
+                {% if current_user.is_admin %}
+                <a href="{{ url_for('admin.admin_dashboard') }}" class="nav-link {% if request.endpoint and 'admin' in request.endpoint %}active{% endif %}">
+                    <i class="ri-settings-4-line"></i> 管理后台
+                </a>
+                {% endif %}
+            </div>
+        </nav>
+        <div class="sidebar-footer">
+            <div class="user-card">
+                <div class="user-avatar">{{ current_user.username[0].upper() }}</div>
+                <div class="user-info">
+                    <div class="user-name">{{ current_user.username }}</div>
+                    <div class="user-role">{{ '管理员' if current_user.is_admin else '用户' }}</div>
+                </div>
+                <a href="{{ url_for('auth.logout') }}" title="退出" style="color:var(--text-muted);font-size:16px;">
+                    <i class="ri-logout-box-r-line"></i>
+                </a>
+            </div>
+        </div>
+    </aside>
+
+    <main class="main">
+        <div class="top-bar">
+            <h1 class="page-title">{% block page_title %}仪表盘{% endblock %}</h1>
+            <div class="top-actions">{% block top_actions %}{% endblock %}</div>
+        </div>
+        <div class="content">{% block content %}{% endblock %}</div>
+    </main>
+    {% else %}
+    {% block auth_content %}{% endblock %}
+    {% endif %}
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+    <div class="flash-wrap">
+        {% for cat, msg in messages %}
+        <div class="flash {{ cat }}" onclick="this.remove()">
+            <i class="ri-{% if cat=='success' %}check{% elif cat=='error' %}close{% elif cat=='warning' %}alert{% else %}information{% endif %}-circle-fill"></i>
+            {{ msg }}
+        </div>
+        {% endfor %}
+    </div>
+    <script>setTimeout(()=>{document.querySelectorAll('.flash').forEach(e=>{e.style.transition='opacity 0.5s';e.style.opacity='0';setTimeout(()=>e.remove(),500);});},4000);</script>
+    {% endif %}
+    {% endwith %}
+
+    {% block scripts %}{% endblock %}
+</body>
+</html>

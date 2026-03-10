@@ -1,0 +1,131 @@
+{% extends "base.html" %}
+{% block title %}仪表盘 - 智能知识库{% endblock %}
+{% block page_title %}仪表盘{% endblock %}
+
+{% block top_actions %}
+<a href="{{ url_for('collect.collection_list') }}" class="btn btn-primary"><i class="ri-link"></i> 智能收集</a>
+<a href="{{ url_for('notes.new_note') }}" class="btn btn-ghost"><i class="ri-add-line"></i> 新建笔记</a>
+{% endblock %}
+
+{% block content %}
+<div class="stats">
+    <div class="stat">
+        <div class="stat-icon purple"><i class="ri-book-2-line"></i></div>
+        <div><div class="stat-val">{{ note_count }}</div><div class="stat-label">知识笔记</div></div>
+    </div>
+    <div class="stat">
+        <div class="stat-icon blue"><i class="ri-link"></i></div>
+        <div><div class="stat-val">{{ collection_count }}</div><div class="stat-label">收集内容</div></div>
+    </div>
+    <div class="stat">
+        <div class="stat-icon green"><i class="ri-bookmark-line"></i></div>
+        <div><div class="stat-val">{{ topic_stats|length }}</div><div class="stat-label">涉及主题</div></div>
+    </div>
+    <div class="stat">
+        <div class="stat-icon pink"><i class="ri-robot-2-line"></i></div>
+        <div><div class="stat-val" style="font-size:14px;">{{ llm_model or '未配置' }}</div><div class="stat-label">AI 模型</div></div>
+    </div>
+</div>
+
+<!-- Quick Collect -->
+<form method="POST" action="{{ url_for('collect.add_collection') }}" class="quick-add">
+    <i class="ri-link" style="color:var(--accent);font-size:20px;padding:8px 0 0 4px;"></i>
+    <input type="text" name="url" class="form-input" placeholder="粘贴文章或视频链接，AI 自动解析归类..." style="border:none;background:transparent;padding:8px;">
+    <button type="submit" class="btn btn-primary"><i class="ri-magic-line"></i> 智能收集</button>
+</form>
+
+<div class="grid-2">
+    <div>
+        <!-- Recent Notes -->
+        <div class="card" style="margin-bottom:20px;">
+            <div class="card-title">
+                <i class="ri-book-2-line"></i> 最新知识
+                <a href="{{ url_for('notes.note_list') }}" style="margin-left:auto;font-size:12px;color:var(--text-muted);">查看全部 →</a>
+            </div>
+            {% if recent_notes %}
+            <div class="notes-grid" style="grid-template-columns:1fr;">
+                {% for note in recent_notes %}
+                <a href="{{ url_for('notes.view_note', note_id=note.id) }}" class="note-card">
+                    <div class="note-card-title">
+                        {% if note.source_type == 'video' %}<i class="ri-video-line" style="color:#f87171;"></i>
+                        {% elif note.source_type == 'article' %}<i class="ri-article-line" style="color:#818cf8;"></i>
+                        {% else %}<i class="ri-file-text-line" style="color:var(--accent);"></i>{% endif %}
+                        {{ note.title }}
+                    </div>
+                    <div class="note-card-excerpt">{{ note.content[:100] }}</div>
+                    <div class="note-card-meta">
+                        <span class="tag tag-{{ note.category or 'topic' }}">{{ {'work':'工作','study':'学习','life':'生活','tech':'技术','finance':'理财','health':'健康'}.get(note.category, note.category or '通用') }}</span>
+                        {% if note.tags %}<span><i class="ri-price-tag-3-line"></i> {{ note.tags[:30] }}</span>{% endif %}
+                        <span><i class="ri-time-line"></i> {{ note.updated_at.strftime('%m-%d %H:%M') }}</span>
+                    </div>
+                </a>
+                {% endfor %}
+            </div>
+            {% else %}
+            <div class="empty" style="padding:30px;">
+                <i class="ri-book-2-line"></i>
+                <h3>还没有知识笔记</h3>
+                <p style="font-size:13px;">试试粘贴一个文章链接让 AI 帮你整理</p>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <div>
+        <!-- Category Distribution -->
+        {% if category_stats %}
+        <div class="card" style="margin-bottom:20px;">
+            <div class="card-title"><i class="ri-pie-chart-line"></i> 知识分类</div>
+            {% set cat_labels = {'work':'工作','study':'学习','life':'生活','tech':'技术','finance':'理财','health':'健康','general':'通用','other':'其他'} %}
+            {% set cat_colors = {'work':'#60a5fa','study':'#34d399','life':'#f472b6','tech':'#818cf8','finance':'#fbbf24','health':'#f87171','general':'#94a3b8','other':'#64748b'} %}
+            <div style="display:flex;flex-wrap:wrap;gap:10px;">
+                {% for cat, count in category_stats %}
+                <div style="background:var(--bg);border-radius:8px;padding:10px 16px;display:flex;align-items:center;gap:8px;">
+                    <span style="width:8px;height:8px;border-radius:50%;background:{{ cat_colors.get(cat,'#818cf8') }};"></span>
+                    <span style="font-size:13px;">{{ cat_labels.get(cat, cat) }}</span>
+                    <span style="font-weight:700;font-size:14px;">{{ count }}</span>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Topics -->
+        <div class="card" style="margin-bottom:20px;">
+            <div class="card-title"><i class="ri-bar-chart-2-line"></i> 学习主题</div>
+            {% if topic_stats %}
+            {% set mx = topic_stats[0][1] if topic_stats else 1 %}
+            {% for t, c in topic_stats %}
+            <div class="topic-bar">
+                <div class="topic-name">{{ t }}</div>
+                <div class="topic-track"><div class="topic-fill" style="width:{{ (c/mx*100)|int }}%"></div></div>
+                <div class="topic-count">{{ c }}</div>
+            </div>
+            {% endfor %}
+            {% else %}
+            <div class="empty" style="padding:20px;"><p style="font-size:13px;">使用后将自动分析主题</p></div>
+            {% endif %}
+        </div>
+
+        <!-- Activity -->
+        <div class="card">
+            <div class="card-title"><i class="ri-history-line"></i> 最近动态</div>
+            {% if recent_activities %}
+            {% for a in recent_activities %}
+            <div class="act-item">
+                <div class="act-icon {% if 'created' in a.activity_type %}create{% elif 'edited' in a.activity_type %}edit{% elif 'viewed' in a.activity_type %}view{% elif 'search' in a.activity_type %}search{% elif 'ai' in a.activity_type %}ai{% elif 'collect' in a.activity_type %}collect{% else %}other{% endif %}">
+                    <i class="ri-{% if 'created' in a.activity_type %}add{% elif 'edited' in a.activity_type %}edit{% elif 'viewed' in a.activity_type %}eye{% elif 'search' in a.activity_type %}search{% elif 'ai' in a.activity_type %}robot{% elif 'collect' in a.activity_type %}link{% else %}record-circle{% endif %}-line"></i>
+                </div>
+                <div style="flex:1;min-width:0;">
+                    <div class="act-text">{{ a.content }}</div>
+                    <div class="act-time">{{ a.created_at.strftime('%m-%d %H:%M') }}</div>
+                </div>
+            </div>
+            {% endfor %}
+            {% else %}
+            <div class="empty" style="padding:20px;"><p style="font-size:13px;">暂无动态</p></div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

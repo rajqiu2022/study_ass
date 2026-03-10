@@ -1,0 +1,86 @@
+{% extends "base.html" %}
+{% block title %}智能收集 - 智能知识库{% endblock %}
+{% block page_title %}智能收集{% endblock %}
+
+{% block top_actions %}
+<a href="{{ url_for('notes.note_list') }}" class="btn btn-ghost"><i class="ri-book-2-line"></i> 知识库</a>
+{% endblock %}
+
+{% block content %}
+<!-- Add URL -->
+<form method="POST" action="{{ url_for('collect.add_collection') }}" class="quick-add">
+    <i class="ri-link" style="color:var(--accent);font-size:22px;padding:6px 0 0 4px;"></i>
+    <input type="text" name="url" class="form-input" placeholder="粘贴文章或视频链接，AI 自动解析、归类、生成笔记..." style="border:none;background:transparent;font-size:14px;padding:8px;" required>
+    <button type="submit" class="btn btn-primary btn-lg"><i class="ri-magic-line"></i> 开始处理</button>
+</form>
+
+<!-- Tips -->
+<div class="card" style="margin-bottom:20px;padding:14px 18px;display:flex;align-items:center;gap:10px;">
+    <i class="ri-lightbulb-line" style="color:#fbbf24;font-size:18px;"></i>
+    <span style="font-size:12px;color:var(--text-secondary);">
+        支持：文章链接（微信公众号、博客、新闻等）、视频链接（B站、YouTube、抖音等）。
+        视频内容会自动提取标题和描述来分析，<b>节省 Token 消耗</b>。
+    </span>
+</div>
+
+<!-- Collection list -->
+{% if collections %}
+{% for c in collections %}
+<div class="collect-card">
+    <div style="display:flex;align-items:flex-start;gap:12px;">
+        <div style="flex:1;min-width:0;">
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+                <span class="tag tag-{{ c.content_type }}">
+                    <i class="ri-{% if c.content_type == 'video' %}video{% else %}article{% endif %}-line" style="margin-right:3px;"></i>
+                    {{ '视频' if c.content_type == 'video' else '文章' }}
+                </span>
+                <span class="tag tag-{{ c.status }}">
+                    {% if c.status == 'done' %}✓ 已完成{% elif c.status == 'processing' %}⏳ 处理中{% elif c.status == 'error' %}✗ 失败{% else %}⏳ 待处理{% endif %}
+                </span>
+                {% if c.category %}
+                <span class="tag tag-topic">{{ c.category }}</span>
+                {% endif %}
+            </div>
+            <div style="font-size:14px;font-weight:600;margin-bottom:4px;">
+                {% if c.note_id %}<a href="{{ url_for('notes.view_note', note_id=c.note_id) }}">{{ c.title or c.url[:60] }}</a>
+                {% else %}{{ c.title or c.url[:60] }}{% endif %}
+            </div>
+            <div style="font-size:12px;color:var(--text-muted);margin-bottom:4px;">
+                <a href="{{ c.url }}" target="_blank" style="color:var(--text-muted);">{{ c.url[:80] }}{% if c.url|length > 80 %}...{% endif %}</a>
+            </div>
+            {% if c.summary %}
+            <div style="font-size:12px;color:var(--text-secondary);line-height:1.6;margin-top:6px;">{{ c.summary[:200] }}{% if c.summary|length > 200 %}...{% endif %}</div>
+            {% endif %}
+            {% if c.error_msg %}
+            <div style="font-size:12px;color:#f87171;margin-top:6px;">{{ c.error_msg[:150] }}</div>
+            {% endif %}
+            <div style="font-size:11px;color:var(--text-muted);margin-top:8px;">
+                收集于 {{ c.created_at.strftime('%Y-%m-%d %H:%M') }}
+                {% if c.processed_at %} · 处理于 {{ c.processed_at.strftime('%H:%M') }}{% endif %}
+            </div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:6px;">
+            {% if c.status == 'done' and c.note_id %}
+            <a href="{{ url_for('notes.view_note', note_id=c.note_id) }}" class="btn btn-ghost btn-sm"><i class="ri-eye-line"></i> 查看</a>
+            {% elif c.status == 'error' %}
+            <a href="{{ url_for('collect.retry_collection', collection_id=c.id) }}" class="btn btn-ghost btn-sm"><i class="ri-refresh-line"></i> 重试</a>
+            {% elif c.status == 'pending' %}
+            <a href="{{ url_for('collect.process_collection', collection_id=c.id) }}" class="btn btn-primary btn-sm"><i class="ri-magic-line"></i> 处理</a>
+            {% endif %}
+            <form method="POST" action="{{ url_for('collect.delete_collection', collection_id=c.id) }}" onsubmit="return confirm('确定删除？')">
+                <button type="submit" class="btn btn-danger btn-sm" style="width:100%;"><i class="ri-delete-bin-line"></i></button>
+            </form>
+        </div>
+    </div>
+</div>
+{% endfor %}
+{% else %}
+<div class="card">
+    <div class="empty">
+        <i class="ri-link"></i>
+        <h3>还没有收集内容</h3>
+        <p style="font-size:13px;max-width:400px;margin:0 auto;">粘贴一个文章或视频链接，AI 将自动提取关键信息、归类整理并生成 Obsidian 笔记</p>
+    </div>
+</div>
+{% endif %}
+{% endblock %}

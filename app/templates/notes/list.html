@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% block title %}知识库 - 智能知识库{% endblock %}
+{% block page_title %}知识库{% endblock %}
+
+{% block top_actions %}
+<a href="{{ url_for('notes.new_note') }}" class="btn btn-primary"><i class="ri-add-line"></i> 新建笔记</a>
+{% endblock %}
+
+{% block content %}
+<div class="card" style="margin-bottom:20px;padding:14px 18px;">
+    <form method="GET" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+        <div style="flex:1;min-width:180px;">
+            <input type="text" name="search" class="form-input" placeholder="搜索标题、内容、标签..." value="{{ search }}" style="border:none;background:transparent;">
+        </div>
+        <select name="folder" class="form-select" style="width:auto;min-width:130px;background:var(--bg);">
+            <option value="">所有文件夹</option>
+            {% for f in folders %}<option value="{{ f }}" {{ 'selected' if current_folder==f }}>{{ f }}</option>{% endfor %}
+        </select>
+        <button type="submit" class="btn btn-primary btn-sm"><i class="ri-search-line"></i> 搜索</button>
+        {% if search or current_folder %}<a href="{{ url_for('notes.note_list') }}" class="btn btn-ghost btn-sm"><i class="ri-close-line"></i></a>{% endif %}
+    </form>
+</div>
+
+{% if notes %}
+<div class="notes-grid">
+    {% for n in notes %}
+    <a href="{{ url_for('notes.view_note', note_id=n.id) }}" class="note-card">
+        <div class="note-card-title">
+            {% if n.source_type == 'video' %}<i class="ri-video-line" style="color:#f87171;"></i>
+            {% elif n.source_type == 'article' %}<i class="ri-article-line" style="color:#818cf8;"></i>
+            {% else %}<i class="ri-file-text-line" style="color:var(--accent);"></i>{% endif %}
+            {{ n.title }}
+        </div>
+        <div class="note-card-excerpt">{{ n.content[:120] }}</div>
+        <div class="note-card-meta">
+            <span class="tag tag-{{ n.category or 'topic' }}" style="font-size:10px;">{{ {'work':'工作','study':'学习','life':'生活','tech':'技术','finance':'理财','health':'健康'}.get(n.category, '通用') }}</span>
+            <span><i class="ri-folder-line"></i> {{ n.folder }}</span>
+            {% if n.tags %}<span><i class="ri-price-tag-3-line"></i> {{ n.tags[:25] }}</span>{% endif %}
+            <span><i class="ri-time-line"></i> {{ n.updated_at.strftime('%m-%d %H:%M') }}</span>
+        </div>
+    </a>
+    {% endfor %}
+</div>
+{% else %}
+<div class="card">
+    <div class="empty">
+        <i class="ri-book-2-line"></i>
+        <h3>{% if search %}没有找到匹配的内容{% else %}知识库为空{% endif %}</h3>
+        <p style="font-size:13px;">{% if not search %}试试 <a href="{{ url_for('collect.collection_list') }}">智能收集</a> 或手动新建笔记{% endif %}</p>
+    </div>
+</div>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% block title %}{{ note.title }}{% endblock %}
+{% block page_title %}{{ note.title }}{% endblock %}
+
+{% block top_actions %}
+<a href="{{ url_for('notes.note_list') }}" class="btn btn-ghost"><i class="ri-arrow-left-line"></i> 返回</a>
+{% if note.user_id == current_user.id %}
+<a href="{{ url_for('notes.edit_note', note_id=note.id) }}" class="btn btn-primary"><i class="ri-edit-line"></i> 编辑</a>
+{% endif %}
+{% endblock %}
+
+{% block content %}
+<div style="max-width:860px;">
+    <div class="card" style="margin-bottom:16px;padding:14px 20px;">
+        <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;font-size:12px;">
+            {% if note.source_type != 'manual' %}
+            <span class="tag tag-{{ note.source_type }}">
+                <i class="ri-{% if note.source_type == 'video' %}video{% else %}article{% endif %}-line" style="margin-right:2px;"></i>
+                {{ '视频' if note.source_type == 'video' else '文章' }}
+            </span>
+            {% endif %}
+            <span class="tag tag-{{ note.category or 'topic' }}">{{ {'work':'工作','study':'学习','life':'生活','tech':'技术','finance':'理财','health':'健康'}.get(note.category, '通用') }}</span>
+            <span style="color:var(--text-muted);"><i class="ri-folder-line"></i> {{ note.folder }}</span>
+            {% if note.tags %}
+            {% for t in note.tags.split(',') %}{% if t.strip() %}<span class="tag tag-topic">{{ t.strip() }}</span>{% endif %}{% endfor %}
+            {% endif %}
+            <span style="color:var(--text-muted);margin-left:auto;"><i class="ri-time-line"></i> {{ note.updated_at.strftime('%Y-%m-%d %H:%M') }}</span>
+        </div>
+        {% if note.source_url %}
+        <div style="margin-top:8px;font-size:12px;"><a href="{{ note.source_url }}" target="_blank" style="color:var(--text-muted);"><i class="ri-external-link-line"></i> 原始链接</a></div>
+        {% endif %}
+    </div>
+    <div class="card">
+        <div class="md-body">{{ html_content|safe }}</div>
+    </div>
+    {% if note.user_id == current_user.id %}
+    <div style="margin-top:18px;display:flex;gap:10px;">
+        <a href="{{ url_for('notes.edit_note', note_id=note.id) }}" class="btn btn-primary"><i class="ri-edit-line"></i> 编辑</a>
+        <form method="POST" action="{{ url_for('notes.delete_note', note_id=note.id) }}" onsubmit="return confirm('确定删除？')" style="display:inline;">
+            <button type="submit" class="btn btn-danger"><i class="ri-delete-bin-line"></i> 删除</button>
+        </form>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

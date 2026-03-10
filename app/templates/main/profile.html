@@ -1,0 +1,94 @@
+{% extends "base.html" %}
+{% block title %}个人资料 - 智能知识库{% endblock %}
+{% block page_title %}个人资料{% endblock %}
+
+{% block content %}
+<div class="grid-2">
+    <div>
+        <div class="card" style="margin-bottom:20px;">
+            <div class="card-title"><i class="ri-user-3-line"></i> 基本信息</div>
+            <form method="POST">
+                <div class="form-group">
+                    <label class="form-label">用户名</label>
+                    <input type="text" class="form-input" value="{{ current_user.username }}" disabled style="opacity:0.6;">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">使用场景</label>
+                    <select name="scene" class="form-select">
+                        <option value="general" {{ 'selected' if current_user.scene == 'general' }}>通用</option>
+                        <option value="work" {{ 'selected' if current_user.scene == 'work' }}>上班族 / 职场</option>
+                        <option value="study" {{ 'selected' if current_user.scene == 'study' }}>学生 / 学习</option>
+                        <option value="life" {{ 'selected' if current_user.scene == 'life' }}>日常生活</option>
+                    </select>
+                    <p style="font-size:11px;color:var(--text-muted);margin-top:4px;">AI 会根据场景优化内容分类</p>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">个人简介</label>
+                    <textarea name="bio" class="form-textarea" rows="2" placeholder="介绍一下你自己...">{{ current_user.bio or '' }}</textarea>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">正在关注 / 学习的内容</label>
+                    <input type="text" name="current_learning" class="form-input" value="{{ current_user.current_learning or '' }}" placeholder="如：Python, 项目管理, 投资理财">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">兴趣领域</label>
+                    <input type="text" name="interests" class="form-input" value="{{ current_user.interests or '' }}" placeholder="如：编程, 人工智能, 阅读">
+                </div>
+                <button type="submit" class="btn btn-primary"><i class="ri-save-line"></i> 保存</button>
+            </form>
+        </div>
+    </div>
+    <div>
+        <div class="card" style="margin-bottom:20px;">
+            <div class="card-title"><i class="ri-heart-line"></i> 兴趣画像</div>
+            {% if current_user.interests %}
+            <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px;">
+                {% for i in current_user.interests.split(',') %}{% if i.strip() %}
+                <span class="tag tag-topic" style="padding:5px 12px;font-size:12px;">{{ i.strip() }}</span>
+                {% endif %}{% endfor %}
+            </div>
+            {% endif %}
+            {% if current_user.current_learning %}
+            <p style="font-size:12px;color:var(--text-secondary);margin-bottom:6px;"><i class="ri-book-read-line" style="color:var(--accent);"></i> 正在学习:</p>
+            <div style="display:flex;flex-wrap:wrap;gap:6px;">
+                {% for t in current_user.current_learning.split(',') %}{% if t.strip() %}
+                <span class="tag" style="background:rgba(16,185,129,0.15);color:#34d399;padding:5px 12px;font-size:12px;">{{ t.strip() }}</span>
+                {% endif %}{% endfor %}
+            </div>
+            {% endif %}
+            {% if not current_user.interests and not current_user.current_learning %}
+            <div class="empty" style="padding:20px;"><p style="font-size:13px;">填写兴趣和学习内容后显示画像</p></div>
+            {% endif %}
+        </div>
+        <div class="card" style="margin-bottom:20px;">
+            <div class="card-title"><i class="ri-bar-chart-2-line"></i> 学习热度</div>
+            {% if top_topics %}
+            {% set mx = top_topics[0][1] if top_topics else 1 %}
+            {% for t, c in top_topics %}
+            <div class="topic-bar">
+                <div class="topic-name">{{ t }}</div>
+                <div class="topic-track"><div class="topic-fill" style="width:{{ (c/mx*100)|int }}%"></div></div>
+                <div class="topic-count">{{ c }}</div>
+            </div>
+            {% endfor %}
+            {% else %}
+            <div class="empty" style="padding:20px;"><p style="font-size:13px;">使用后自动统计</p></div>
+            {% endif %}
+        </div>
+        <div class="card">
+            <div class="card-title"><i class="ri-pie-chart-line"></i> 活动统计</div>
+            {% set type_labels = {'note_created':'创建笔记','note_edited':'编辑笔记','note_deleted':'删除笔记','topic_viewed':'浏览笔记','search':'搜索','ai_query':'AI问答','profile_updated':'更新资料','content_collected':'智能收集','content_processed':'AI整理'} %}
+            {% if activity_types %}
+            {% for tn, c in activity_types %}
+            <div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);">
+                <span style="flex:1;font-size:13px;">{{ type_labels.get(tn, tn) }}</span>
+                <span style="font-weight:600;font-size:13px;">{{ c }}</span>
+            </div>
+            {% endfor %}
+            {% else %}
+            <div class="empty" style="padding:20px;"><p style="font-size:13px;">暂无记录</p></div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

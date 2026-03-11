@@ -142,6 +142,48 @@ class ChatMessage(db.Model):
         return f'<ChatMessage {self.role}: {self.content[:30]}>'
 
 
+class FinanceRecord(db.Model):
+    """Personal finance records - income and expenses."""
+    __tablename__ = 'finance_records'
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False, index=True)
+    record_type = db.Column(db.String(10), nullable=False)  # 'expense' or 'income'
+    amount = db.Column(db.Float, nullable=False)
+    category = db.Column(db.String(50), nullable=False)  # e.g. '餐饮','交通','工资','兼职'
+    description = db.Column(db.Text, default='')  # original user input or detail
+    record_date = db.Column(db.Date, nullable=False, index=True)  # the actual date of the record
+    source = db.Column(db.String(20), default='ai')  # 'ai' (from assistant), 'manual' (from form)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    user = db.relationship('User', backref=db.backref('finance_records', lazy='dynamic',
+                                                       cascade='all, delete-orphan'))
+
+    # Category presets
+    EXPENSE_CATEGORIES = [
+        '餐饮', '交通', '购物', '娱乐', '居住', '医疗', '教育', '通讯',
+        '服饰', '美容', '社交', '旅行', '宠物', '办公', '数码', '其他支出'
+    ]
+    INCOME_CATEGORIES = [
+        '工资', '奖金', '兼职', '理财', '报销', '红包', '转账', '其他收入'
+    ]
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'record_type': self.record_type,
+            'amount': self.amount,
+            'category': self.category,
+            'description': self.description,
+            'record_date': self.record_date.strftime('%Y-%m-%d'),
+            'source': self.source,
+            'created_at': self.created_at.strftime('%Y-%m-%d %H:%M')
+        }
+
+    def __repr__(self):
+        return f'<Finance {self.record_type}: {self.category} {self.amount}>'
+
+
 class SystemConfig(db.Model):
     """System-wide configuration, managed by admin."""
     __tablename__ = 'system_config'

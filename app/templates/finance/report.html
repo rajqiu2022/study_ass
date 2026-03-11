@@ -1,0 +1,541 @@
+{% extends "base.html" %}
+{% block title %}记账报表 - 智能知识库{% endblock %}
+{% block page_title %}记账报表{% endblock %}
+
+{% block top_actions %}
+<button class="btn btn-primary btn-sm" onclick="showAddModal()">
+    <i class="ri-add-line"></i> 手动记一笔
+</button>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+    .date-filter {
+        display:flex; align-items:center; gap:10px; margin-bottom:22px;
+        flex-wrap:wrap;
+    }
+    .date-filter input[type="date"] {
+        padding:8px 12px; border:1px solid var(--border); border-radius:var(--radius-sm);
+        background:var(--bg-card); color:var(--text); font-size:13px; font-family:inherit;
+    }
+    .date-filter input[type="date"]:focus { outline:none; border-color:var(--accent); }
+    .quick-range {
+        display:flex; gap:6px;
+    }
+    .quick-range button {
+        padding:5px 12px; border-radius:var(--radius-sm);
+        border:1px solid var(--border); background:var(--bg-card);
+        color:var(--text-secondary); font-size:12px; cursor:pointer;
+        transition:all 0.15s;
+    }
+    .quick-range button:hover { border-color:var(--accent); color:var(--accent); }
+    .quick-range button.active { background:var(--accent); color:white; border-color:var(--accent); }
+
+    /* Summary stats */
+    .finance-stats {
+        display:grid; grid-template-columns:repeat(auto-fit, minmax(180px, 1fr));
+        gap:14px; margin-bottom:24px;
+    }
+    .finance-stat {
+        background:var(--bg-card); border:1px solid var(--border);
+        border-radius:var(--radius); padding:18px 20px;
+        display:flex; flex-direction:column; gap:6px;
+    }
+    .finance-stat-label { font-size:12px; color:var(--text-muted); }
+    .finance-stat-value { font-size:26px; font-weight:700; }
+    .finance-stat-value.expense { color:#f87171; }
+    .finance-stat-value.income { color:#34d399; }
+    .finance-stat-value.balance { color:var(--accent-hover); }
+    .finance-stat-value.balance.negative { color:#f87171; }
+
+    /* Charts area */
+    .charts-row {
+        display:grid; grid-template-columns:1fr 1fr; gap:18px; margin-bottom:24px;
+    }
+    @media(max-width:900px) { .charts-row { grid-template-columns:1fr; } }
+
+    .chart-card {
+        background:var(--bg-card); border:1px solid var(--border);
+        border-radius:var(--radius); padding:20px;
+    }
+    .chart-title {
+        font-size:14px; font-weight:600; margin-bottom:16px;
+        display:flex; align-items:center; gap:8px;
+    }
+    .chart-title i { color:var(--accent); }
+
+    /* Category bars */
+    .cat-bars { display:flex; flex-direction:column; gap:10px; }
+    .cat-bar-row { display:flex; align-items:center; gap:10px; }
+    .cat-bar-name { font-size:12px; min-width:60px; color:var(--text-secondary); white-space:nowrap; }
+    .cat-bar-track { flex:1; height:22px; background:var(--bg); border-radius:4px; overflow:hidden; position:relative; }
+    .cat-bar-fill {
+        height:100%; border-radius:4px; transition:width 0.6s ease;
+        display:flex; align-items:center; padding:0 8px; min-width:fit-content;
+    }
+    .cat-bar-fill.expense { background:linear-gradient(90deg, #ef4444, #f87171); }
+    .cat-bar-fill.income { background:linear-gradient(90deg, #10b981, #34d399); }
+    .cat-bar-amount { font-size:11px; font-weight:600; color:white; white-space:nowrap; }
+    .cat-bar-pct { font-size:11px; color:var(--text-muted); min-width:40px; text-align:right; }
+
+    /* Daily trend chart using CSS */
+    .trend-chart {
+        display:flex; align-items:flex-end; gap:2px; height:160px;
+        padding:10px 0; overflow-x:auto;
+    }
+    .trend-bar-group {
+        display:flex; flex-direction:column; align-items:center; gap:2px; flex:1; min-width:18px;
+    }
+    .trend-bars { display:flex; gap:1px; align-items:flex-end; height:130px; }
+    .trend-bar {
+        width:8px; border-radius:2px 2px 0 0; transition:height 0.4s ease;
+        cursor:pointer; position:relative;
+    }
+    .trend-bar.expense { background:#ef4444; }
+    .trend-bar.income { background:#10b981; }
+    .trend-bar:hover { opacity:0.8; }
+    .trend-bar-label { font-size:9px; color:var(--text-muted); transform:rotate(-45deg); white-space:nowrap; margin-top:4px; }
+
+    /* Records table */
+    .records-card {
+        background:var(--bg-card); border:1px solid var(--border);
+        border-radius:var(--radius); overflow:hidden;
+    }
+    .records-header {
+        padding:16px 20px; display:flex; align-items:center; justify-content:space-between;
+        border-bottom:1px solid var(--border);
+    }
+    .records-header h3 { font-size:14px; font-weight:600; display:flex; align-items:center; gap:8px; }
+    .records-header h3 i { color:var(--accent); }
+    .records-body { max-height:500px; overflow-y:auto; }
+
+    .record-row {
+        display:flex; align-items:center; gap:12px;
+        padding:12px 20px; border-bottom:1px solid var(--border);
+        transition:background 0.15s;
+    }
+    .record-row:hover { background:var(--bg-hover); }
+    .record-row:last-child { border-bottom:none; }
+    .record-icon {
+        width:36px; height:36px; border-radius:10px;
+        display:flex; align-items:center; justify-content:center;
+        font-size:16px; flex-shrink:0;
+    }
+    .record-icon.expense { background:rgba(239,68,68,0.12); color:#f87171; }
+    .record-icon.income { background:rgba(16,185,129,0.12); color:#34d399; }
+    .record-info { flex:1; min-width:0; }
+    .record-cat { font-size:13px; font-weight:500; }
+    .record-desc { font-size:11px; color:var(--text-muted); margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .record-right { text-align:right; flex-shrink:0; }
+    .record-amount { font-size:14px; font-weight:600; }
+    .record-amount.expense { color:#f87171; }
+    .record-amount.income { color:#34d399; }
+    .record-date { font-size:11px; color:var(--text-muted); margin-top:2px; }
+    .record-del {
+        width:28px; height:28px; border:none; border-radius:6px;
+        background:transparent; color:var(--text-muted); cursor:pointer;
+        display:flex; align-items:center; justify-content:center; font-size:14px;
+        opacity:0; transition:all 0.15s; flex-shrink:0;
+    }
+    .record-row:hover .record-del { opacity:1; }
+    .record-del:hover { background:rgba(239,68,68,0.12); color:#f87171; }
+
+    /* No data */
+    .no-data { text-align:center; padding:40px; color:var(--text-muted); font-size:13px; }
+    .no-data i { font-size:36px; display:block; margin-bottom:10px; }
+
+    /* Add record modal */
+    .add-modal-overlay {
+        position:fixed; top:0; left:0; right:0; bottom:0;
+        background:rgba(0,0,0,0.5); z-index:1000;
+        display:flex; align-items:center; justify-content:center;
+    }
+    .add-modal {
+        background:var(--bg-card); border-radius:var(--radius);
+        border:1px solid var(--border); padding:24px;
+        width:420px; max-width:90vw; box-shadow:0 20px 60px rgba(0,0,0,0.3);
+    }
+    .add-modal h3 { font-size:15px; font-weight:600; margin-bottom:16px; display:flex; align-items:center; gap:8px; }
+    .add-modal h3 i { color:var(--accent); }
+    .add-modal label { font-size:12px; font-weight:500; color:var(--text-secondary); display:block; margin-bottom:4px; margin-top:12px; }
+    .add-modal input, .add-modal select {
+        width:100%; padding:8px 12px; border:1px solid var(--border); border-radius:var(--radius-sm);
+        font-size:13px; background:var(--bg); color:var(--text); font-family:inherit;
+    }
+    .add-modal input:focus, .add-modal select:focus { outline:none; border-color:var(--accent); box-shadow:0 0 0 3px var(--accent-glow); }
+    .add-modal-btns { display:flex; gap:8px; justify-content:flex-end; margin-top:18px; }
+
+    .type-toggle {
+        display:flex; gap:0; border:1px solid var(--border); border-radius:var(--radius-sm); overflow:hidden;
+    }
+    .type-toggle button {
+        flex:1; padding:8px 16px; border:none; background:var(--bg);
+        color:var(--text-secondary); font-size:13px; cursor:pointer;
+        font-weight:500; transition:all 0.15s;
+    }
+    .type-toggle button.active-expense { background:#ef4444; color:white; }
+    .type-toggle button.active-income { background:#10b981; color:white; }
+
+    /* Chart legend */
+    .chart-legend {
+        display:flex; gap:16px; margin-bottom:12px;
+    }
+    .legend-item {
+        display:flex; align-items:center; gap:6px; font-size:11px; color:var(--text-secondary);
+    }
+    .legend-dot { width:8px; height:8px; border-radius:50%; }
+    .legend-dot.expense { background:#ef4444; }
+    .legend-dot.income { background:#10b981; }
+
+    /* Tooltip */
+    .bar-tooltip {
+        position:absolute; bottom:calc(100% + 6px); left:50%; transform:translateX(-50%);
+        background:var(--bg-card); border:1px solid var(--border);
+        border-radius:6px; padding:6px 10px; font-size:11px;
+        white-space:nowrap; display:none; z-index:10;
+        box-shadow:0 4px 12px rgba(0,0,0,0.3);
+    }
+    .trend-bar:hover .bar-tooltip { display:block; }
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- Date Filter -->
+<div class="date-filter">
+    <span style="font-size:13px;color:var(--text-secondary);font-weight:500;">日期范围</span>
+    <input type="date" id="startDate" value="{{ start_date }}" />
+    <span style="color:var(--text-muted);">至</span>
+    <input type="date" id="endDate" value="{{ end_date }}" />
+    <button class="btn btn-primary btn-sm" onclick="applyDateFilter()">
+        <i class="ri-search-line"></i> 查询
+    </button>
+    <div class="quick-range">
+        <button onclick="setRange('today')">今天</button>
+        <button onclick="setRange('week')">本周</button>
+        <button onclick="setRange('month')" class="active">本月</button>
+        <button onclick="setRange('year')">本年</button>
+    </div>
+</div>
+
+<!-- Summary Stats -->
+<div class="finance-stats">
+    <div class="finance-stat">
+        <span class="finance-stat-label"><i class="ri-arrow-down-circle-line" style="color:#f87171;"></i> 总支出</span>
+        <span class="finance-stat-value expense">¥{{ "%.2f"|format(total_expense) }}</span>
+    </div>
+    <div class="finance-stat">
+        <span class="finance-stat-label"><i class="ri-arrow-up-circle-line" style="color:#34d399;"></i> 总收入</span>
+        <span class="finance-stat-value income">¥{{ "%.2f"|format(total_income) }}</span>
+    </div>
+    <div class="finance-stat">
+        <span class="finance-stat-label"><i class="ri-wallet-3-line" style="color:var(--accent-hover);"></i> 结余</span>
+        <span class="finance-stat-value balance {% if balance < 0 %}negative{% endif %}">
+            {{ '+' if balance > 0 else '' }}¥{{ "%.2f"|format(balance) }}
+        </span>
+    </div>
+    <div class="finance-stat">
+        <span class="finance-stat-label"><i class="ri-file-list-3-line" style="color:var(--accent-hover);"></i> 记录数</span>
+        <span class="finance-stat-value balance">{{ records|length }}</span>
+    </div>
+</div>
+
+<!-- Charts Row -->
+<div class="charts-row">
+    <!-- Category Breakdown -->
+    <div class="chart-card">
+        <div class="chart-title"><i class="ri-pie-chart-line"></i> 支出分类</div>
+        {% if expense_by_cat %}
+        <div class="cat-bars">
+            {% for cat, amount in expense_by_cat.items() %}
+            <div class="cat-bar-row">
+                <span class="cat-bar-name">{{ cat }}</span>
+                <div class="cat-bar-track">
+                    <div class="cat-bar-fill expense"
+                         style="width:{{ (amount / total_expense * 100) if total_expense > 0 else 0 }}%">
+                        <span class="cat-bar-amount">¥{{ "%.0f"|format(amount) }}</span>
+                    </div>
+                </div>
+                <span class="cat-bar-pct">{{ "%.0f"|format(amount / total_expense * 100) if total_expense > 0 else 0 }}%</span>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="no-data"><i class="ri-pie-chart-line"></i>暂无支出记录</div>
+        {% endif %}
+    </div>
+
+    <div class="chart-card">
+        <div class="chart-title"><i class="ri-pie-chart-line"></i> 收入分类</div>
+        {% if income_by_cat %}
+        <div class="cat-bars">
+            {% for cat, amount in income_by_cat.items() %}
+            <div class="cat-bar-row">
+                <span class="cat-bar-name">{{ cat }}</span>
+                <div class="cat-bar-track">
+                    <div class="cat-bar-fill income"
+                         style="width:{{ (amount / total_income * 100) if total_income > 0 else 0 }}%">
+                        <span class="cat-bar-amount">¥{{ "%.0f"|format(amount) }}</span>
+                    </div>
+                </div>
+                <span class="cat-bar-pct">{{ "%.0f"|format(amount / total_income * 100) if total_income > 0 else 0 }}%</span>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="no-data"><i class="ri-pie-chart-line"></i>暂无收入记录</div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Daily Trend -->
+<div class="chart-card" style="margin-bottom:24px;">
+    <div class="chart-title"><i class="ri-bar-chart-2-line"></i> 每日收支趋势</div>
+    <div class="chart-legend">
+        <span class="legend-item"><span class="legend-dot expense"></span> 支出</span>
+        <span class="legend-item"><span class="legend-dot income"></span> 收入</span>
+    </div>
+    <div class="trend-chart" id="trendChart"></div>
+</div>
+
+<!-- Records List -->
+<div class="records-card">
+    <div class="records-header">
+        <h3><i class="ri-list-check-2"></i> 明细记录</h3>
+        <span style="font-size:12px;color:var(--text-muted);">共 {{ records|length }} 条</span>
+    </div>
+    <div class="records-body" id="recordsBody">
+        {% if records %}
+        {% for r in records %}
+        <div class="record-row" id="record-{{ r.id }}">
+            <div class="record-icon {{ r.record_type }}">
+                <i class="ri-{% if r.record_type == 'expense' %}arrow-down-line{% else %}arrow-up-line{% endif %}"></i>
+            </div>
+            <div class="record-info">
+                <div class="record-cat">{{ r.category }}</div>
+                <div class="record-desc">{{ r.description or '-' }}{% if r.source == 'ai' %} <span style="color:var(--accent);font-size:10px;">AI</span>{% endif %}</div>
+            </div>
+            <div class="record-right">
+                <div class="record-amount {{ r.record_type }}">
+                    {{ '-' if r.record_type == 'expense' else '+' }}¥{{ "%.2f"|format(r.amount) }}
+                </div>
+                <div class="record-date">{{ r.record_date.strftime('%m-%d') }}</div>
+            </div>
+            <button class="record-del" onclick="deleteRecord({{ r.id }})" title="删除">
+                <i class="ri-delete-bin-line"></i>
+            </button>
+        </div>
+        {% endfor %}
+        {% else %}
+        <div class="no-data">
+            <i class="ri-wallet-line"></i>
+            <p>该时间段暂无记录</p>
+            <p style="margin-top:6px;font-size:12px;">在 <strong>AI 助手</strong> 中说「午饭花了35元」即可自动记录</p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Add Record Modal -->
+<div id="addModal" style="display:none"></div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// --- Date Filter ---
+function applyDateFilter() {
+    const start = document.getElementById('startDate').value;
+    const end = document.getElementById('endDate').value;
+    window.location.href = '/finance/?start=' + start + '&end=' + end;
+}
+
+function setRange(range) {
+    const today = new Date();
+    let start, end;
+    const fmt = d => d.toISOString().split('T')[0];
+    end = fmt(today);
+
+    switch(range) {
+        case 'today':
+            start = end;
+            break;
+        case 'week':
+            const weekStart = new Date(today);
+            weekStart.setDate(today.getDate() - today.getDay() + 1);
+            start = fmt(weekStart);
+            break;
+        case 'month':
+            start = fmt(new Date(today.getFullYear(), today.getMonth(), 1));
+            break;
+        case 'year':
+            start = fmt(new Date(today.getFullYear(), 0, 1));
+            break;
+    }
+    window.location.href = '/finance/?start=' + start + '&end=' + end;
+}
+
+// --- Daily Trend Chart ---
+const dailyExpense = {{ daily_expense|safe }};
+const dailyIncome = {{ daily_income|safe }};
+
+function renderTrendChart() {
+    const container = document.getElementById('trendChart');
+    if (!container) return;
+
+    const dates = Object.keys(dailyExpense);
+    if (dates.length === 0) {
+        container.innerHTML = '<div class="no-data" style="width:100%"><i class="ri-bar-chart-2-line"></i>暂无数据</div>';
+        return;
+    }
+
+    // Find max value for scaling
+    let maxVal = 0;
+    dates.forEach(d => {
+        maxVal = Math.max(maxVal, dailyExpense[d] || 0, dailyIncome[d] || 0);
+    });
+    if (maxVal === 0) maxVal = 1;
+
+    let html = '';
+    dates.forEach(d => {
+        const exp = dailyExpense[d] || 0;
+        const inc = dailyIncome[d] || 0;
+        const expH = Math.max(exp > 0 ? 4 : 0, (exp / maxVal) * 120);
+        const incH = Math.max(inc > 0 ? 4 : 0, (inc / maxVal) * 120);
+        const shortDate = d.substring(5);  // MM-DD
+
+        html += `<div class="trend-bar-group">
+            <div class="trend-bars">
+                <div class="trend-bar expense" style="height:${expH}px" title="支出 ¥${exp.toFixed(0)}">
+                    <div class="bar-tooltip">📅 ${shortDate}<br>支出 ¥${exp.toFixed(2)}</div>
+                </div>
+                <div class="trend-bar income" style="height:${incH}px" title="收入 ¥${inc.toFixed(0)}">
+                    <div class="bar-tooltip">📅 ${shortDate}<br>收入 ¥${inc.toFixed(2)}</div>
+                </div>
+            </div>
+            ${dates.length <= 31 ? `<span class="trend-bar-label">${shortDate}</span>` : ''}
+        </div>`;
+    });
+    container.innerHTML = html;
+}
+renderTrendChart();
+
+// --- Delete Record ---
+async function deleteRecord(id) {
+    if (!confirm('确定删除这条记录？')) return;
+    try {
+        const resp = await fetch('/finance/delete/' + id, { method: 'POST' });
+        const data = await resp.json();
+        if (data.ok) {
+            const el = document.getElementById('record-' + id);
+            if (el) {
+                el.style.transition = 'opacity 0.3s, transform 0.3s';
+                el.style.opacity = '0';
+                el.style.transform = 'translateX(20px)';
+                setTimeout(() => {
+                    el.remove();
+                    // Refresh page to update stats
+                    location.reload();
+                }, 300);
+            }
+        } else {
+            alert(data.error || '删除失败');
+        }
+    } catch(e) {
+        alert('删除失败');
+    }
+}
+
+// --- Add Record Modal ---
+const expenseCategories = {{ expense_categories|tojson|safe }};
+const incomeCategories = {{ income_categories|tojson|safe }};
+
+function showAddModal() {
+    const modal = document.getElementById('addModal');
+    const today = new Date().toISOString().split('T')[0];
+    modal.style.display = 'block';
+    modal.innerHTML = `
+        <div class="add-modal-overlay" onclick="closeAddModal(event)">
+            <div class="add-modal" onclick="event.stopPropagation()">
+                <h3><i class="ri-add-circle-line"></i> 手动记一笔</h3>
+                <label>类型</label>
+                <div class="type-toggle">
+                    <button id="typeExpense" class="active-expense" onclick="setType('expense')">💸 支出</button>
+                    <button id="typeIncome" onclick="setType('income')">💰 收入</button>
+                </div>
+                <label>金额</label>
+                <input type="number" id="addAmount" placeholder="0.00" step="0.01" min="0" />
+                <label>分类</label>
+                <select id="addCategory"></select>
+                <label>备注</label>
+                <input type="text" id="addDesc" placeholder="简单描述..." />
+                <label>日期</label>
+                <input type="date" id="addDate" value="${today}" />
+                <input type="hidden" id="addType" value="expense" />
+                <div class="add-modal-btns">
+                    <button class="btn btn-ghost" onclick="closeAddModal()">取消</button>
+                    <button class="btn btn-primary" onclick="doAddRecord()">
+                        <i class="ri-check-line"></i> 保存
+                    </button>
+                </div>
+            </div>
+        </div>
+    `;
+    updateCategoryOptions('expense');
+}
+
+function setType(type) {
+    document.getElementById('addType').value = type;
+    const expBtn = document.getElementById('typeExpense');
+    const incBtn = document.getElementById('typeIncome');
+    if (type === 'expense') {
+        expBtn.className = 'active-expense';
+        incBtn.className = '';
+    } else {
+        expBtn.className = '';
+        incBtn.className = 'active-income';
+    }
+    updateCategoryOptions(type);
+}
+
+function updateCategoryOptions(type) {
+    const select = document.getElementById('addCategory');
+    const cats = type === 'expense' ? expenseCategories : incomeCategories;
+    select.innerHTML = cats.map(c => `<option value="${c}">${c}</option>`).join('');
+}
+
+function closeAddModal(e) {
+    if (e && e.target !== e.currentTarget) return;
+    document.getElementById('addModal').style.display = 'none';
+    document.getElementById('addModal').innerHTML = '';
+}
+
+async function doAddRecord() {
+    const amount = parseFloat(document.getElementById('addAmount').value);
+    const category = document.getElementById('addCategory').value;
+    const description = document.getElementById('addDesc').value.trim();
+    const record_date = document.getElementById('addDate').value;
+    const record_type = document.getElementById('addType').value;
+
+    if (!amount || amount <= 0) {
+        alert('请输入有效金额');
+        return;
+    }
+
+    try {
+        const resp = await fetch('/finance/add', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ record_type, amount, category, description, record_date })
+        });
+        const data = await resp.json();
+        if (data.ok) {
+            closeAddModal();
+            location.reload();
+        } else {
+            alert(data.error || '保存失败');
+        }
+    } catch(e) {
+        alert('保存失败，请重试');
+    }
+}
+</script>
+{% endblock %}

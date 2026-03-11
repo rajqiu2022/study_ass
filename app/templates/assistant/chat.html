@@ -372,6 +372,10 @@
                 <div class="welcome-card-title">📝 知识整理</div>
                 <div class="welcome-card-desc">撰写文档、整理笔记、归纳总结</div>
             </div>
+            <div class="welcome-card" onclick="quickStart('午饭花了35元，打车20元')">
+                <div class="welcome-card-title">💰 智能记账</div>
+                <div class="welcome-card-desc">说出消费/收入，自动分类记录</div>
+            </div>
         </div>
     </div>
     {% endif %}
@@ -590,6 +594,16 @@ async function sendMsg() {
             // Show action badges if any enrichments were done
             if (data.actions && data.actions.length > 0) {
                 addActionBadge(data.actions);
+            }
+            // Show finance record badge if saved
+            if (data.finance_record) {
+                const fr = data.finance_record;
+                const badge = document.createElement('div');
+                badge.className = 'actions-badge';
+                badge.style.cursor = 'pointer';
+                badge.innerHTML = `<i class="ri-wallet-3-line"></i> 💰 已记账：${fr.type} ¥${fr.amount.toFixed(2)} · ${fr.category} · ${fr.date} <span style="margin-left:8px;text-decoration:underline;">查看报表→</span>`;
+                badge.onclick = () => window.open('/finance/', '_blank');
+                chatMsgs.appendChild(badge);
             }
             addMsgUI('assistant', data.response, timeStr, data.message_id);
 

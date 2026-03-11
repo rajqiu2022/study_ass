@@ -17,8 +17,9 @@ from datetime import datetime
 from flask import Blueprint, render_template, request, jsonify
 from flask_login import login_required, current_user
 from app import db
+from datetime import date as date_type
 from app.models import (LearningActivity, SystemConfig, Conversation, ChatMessage,
-                         Note, User)
+                         Note, User, FinanceRecord)
 
 assistant_bp = Blueprint('assistant', __name__, url_prefix='/assistant')
 
@@ -269,7 +270,95 @@ def _detect_intent(message):
             intent['search_query'] = message
             break
 
+    # Check if user wants to record a finance entry
+    finance_keywords = [
+        '花了', '花费', '消费', '支出', '买了', '购买', '付了', '付款',
+        '充值', '缴费', '打车', '吃饭', '外卖', '点了',
+        '收入', '工资', '奖金', '进账', '到账', '收到', '赚了', '入账',
+        '报销', '红包', '转账收', '兼职',
+        '记账', '记一笔', '记录一下',
+        '块', '元', '￥', '¥'
+    ]
+    # Need at least one finance keyword AND a number to be considered finance
+    has_finance_kw = any(kw in msg_lower for kw in finance_keywords)
+    has_number = bool(re.search(r'\d+\.?\d*', message))
+    if has_finance_kw and has_number:
+        intent['is_finance'] = True
+
     return intent
+
+
+# ===================== Finance Parsing =====================
+
+def _parse_finance_with_llm(message, api_base, api_key, model):
+    """Use LLM to parse a finance record from user message.
+    Returns dict with: record_type, amount, category, description, record_date or None.
+    """
+    today = date_type.today().strftime('%Y-%m-%d')
+    categories_info = (
+        f"支出分类: {', '.join(FinanceRecord.EXPENSE_CATEGORIES)}\n"
+        f"收入分类: {', '.join(FinanceRecord.INCOME_CATEGORIES)}"
+    )
+    prompt = [
+        {'role': 'system', 'content': f'''你是一个记账解析助手。今天是 {today}。
+用户会用自然语言描述一笔消费或收入，你需要从中提取以下信息，严格以 JSON 格式输出：
+{{
+  "record_type": "expense" 或 "income",
+  "amount": 数字金额,
+  "category": "分类名称",
+  "description": "简短描述",
+  "record_date": "YYYY-MM-DD"
+}}
+
+{categories_info}
+
+规则：
+1. 如果用户没有说具体日期，默认用今天 {today}
+2. 如果说"昨天"就用昨天的日期，"前天"用前天的日期
+3. 金额提取纯数字，不要带单位
+4. 从上面的预设分类中选择最匹配的，不要自创分类
+5. description 简洁概括，不超过20字
+6. 只输出 JSON，不要输出任何其他内容'''},
+        {'role': 'user', 'content': message}
+    ]
+    try:
+        result = _call_llm(api_base, api_key, model, prompt, max_tokens=200, temperature=0.1)
+        # Clean up: remove thinking tags, markdown code blocks
+        result = re.sub(r'<think>.*?</think>', '', result, flags=re.DOTALL).strip()
+        result = re.sub(r'^```(?:json)?\s*', '', result, flags=re.MULTILINE)
+        result = re.sub(r'```\s*$', '', result, flags=re.MULTILINE)
+        result = result.strip()
+
+        data = json.loads(result)
+        # Validate
+        if data.get('record_type') not in ('expense', 'income'):
+            return None
+        if not isinstance(data.get('amount'), (int, float)) or data['amount'] <= 0:
+            return None
+        return data
+    except Exception:
+        return None
+
+
+def _save_finance_record(user_id, parsed):
+    """Save a parsed finance record to the database. Returns the record."""
+    try:
+        record_date = datetime.strptime(parsed['record_date'], '%Y-%m-%d').date()
+    except (ValueError, KeyError):
+        record_date = date_type.today()
+
+    record = FinanceRecord(
+        user_id=user_id,
+        record_type=parsed['record_type'],
+        amount=parsed['amount'],
+        category=parsed.get('category', '其他支出' if parsed['record_type'] == 'expense' else '其他收入'),
+        description=parsed.get('description', ''),
+        record_date=record_date,
+        source='ai'
+    )
+    db.session.add(record)
+    db.session.commit()
+    return record
 
 
 # ===================== System Prompt =====================
@@ -292,7 +381,8 @@ def _build_system_prompt(conversation, extra_context=''):
 - 🌐 联网搜索：可以搜索互联网获取最新信息
 - 🔗 链接分析：可以抓取和分析网页内容，提取要点
 - 📝 知识整理：总结要点、生成笔记、思维导图结构、知识归纳
-- 🌟 生活建议：理财规划、健康管理、旅行规划、时间管理"""
+- 🌟 生活建议：理财规划、健康管理、旅行规划、时间管理
+- 💰 智能记账：识别消费/收入记录，自动归类并保存（可在记账报表中查看）"""
 
     # Inject user context
     try:
@@ -551,6 +641,25 @@ def send_message():
                 extra_context += '\n' + _format_search_results(results)
                 actions_taken.append(f'已搜索: {search_query[:30]}')
 
+        # --- Finance Record Detection ---
+        finance_saved = None
+        if intent.get('is_finance'):
+            parsed = _parse_finance_with_llm(message, api_base, api_key, model)
+            if parsed:
+                record = _save_finance_record(current_user.id, parsed)
+                finance_saved = record
+                type_label = '支出' if record.record_type == 'expense' else '收入'
+                extra_context += (
+                    f'\n\n[系统提示] 已自动识别并保存了一笔记账记录：\n'
+                    f'- 类型：{type_label}\n'
+                    f'- 金额：¥{record.amount:.2f}\n'
+                    f'- 分类：{record.category}\n'
+                    f'- 描述：{record.description}\n'
+                    f'- 日期：{record.record_date}\n'
+                    f'请在回复中确认已帮用户记录了这笔{type_label}，并简要总结。'
+                    f'可以提醒用户在「记账报表」页面查看详细统计。'
+                )
+
         # --- Build LLM messages ---
         system_prompt = _build_system_prompt(conv, extra_context)
         llm_messages = [{'role': 'system', 'content': system_prompt}]
@@ -585,13 +694,25 @@ def send_message():
         # Compression
         _maybe_compress(conv, api_base, api_key, model)
 
-        return jsonify({
+        result_data = {
             'response': response_text,
             'conversation_id': conv.id,
             'conversation_title': conv.title,
             'message_id': ai_msg.id,
             'actions': actions_taken  # tell frontend what enrichments were done
-        })
+        }
+        if finance_saved:
+            type_label = '支出' if finance_saved.record_type == 'expense' else '收入'
+            result_data['finance_record'] = {
+                'id': finance_saved.id,
+                'type': type_label,
+                'amount': finance_saved.amount,
+                'category': finance_saved.category,
+                'description': finance_saved.description,
+                'date': finance_saved.record_date.strftime('%Y-%m-%d')
+            }
+
+        return jsonify(result_data)
 
     except urllib.error.HTTPError as e:
         error_body = e.read().decode('utf-8', errors='ignore') if e.fp else ''

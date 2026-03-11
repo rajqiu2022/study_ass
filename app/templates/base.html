@@ -306,6 +306,9 @@
                 <a href="{{ url_for('assistant.assistant_page') }}" class="nav-link {% if request.endpoint and 'assistant' in request.endpoint %}active{% endif %}">
                     <i class="ri-robot-2-line"></i> AI 助手
                 </a>
+                <a href="{{ url_for('finance.finance_page') }}" class="nav-link {% if request.endpoint and 'finance' in request.endpoint %}active{% endif %}">
+                    <i class="ri-wallet-3-line"></i> 记账报表
+                </a>
             </div>
             <div class="nav-section">
                 <div class="nav-section-title">个人</div>

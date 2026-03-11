@@ -10,8 +10,8 @@
 <!-- Add URL -->
 <form method="POST" action="{{ url_for('collect.add_collection') }}" class="quick-add">
     <i class="ri-link" style="color:var(--accent);font-size:22px;padding:6px 0 0 4px;"></i>
-    <input type="text" name="url" class="form-input" placeholder="粘贴文章或视频链接，AI 自动解析、归类、生成笔记..." style="border:none;background:transparent;font-size:14px;padding:8px;" required>
-    <button type="submit" class="btn btn-primary btn-lg"><i class="ri-magic-line"></i> 开始处理</button>
+    <input type="text" name="url" class="form-input" placeholder="粘贴文章或视频链接，AI 自动解析归类..." style="border:none;background:transparent;font-size:14px;padding:8px;" required>
+    <button type="submit" class="btn btn-primary"><i class="ri-magic-line"></i> 开始处理</button>
 </form>
 
 <!-- Tips -->
@@ -27,9 +27,9 @@
 {% if collections %}
 {% for c in collections %}
 <div class="collect-card">
-    <div style="display:flex;align-items:flex-start;gap:12px;">
+    <div style="display:flex;align-items:flex-start;gap:12px;flex-wrap:wrap;">
         <div style="flex:1;min-width:0;">
-            <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;flex-wrap:wrap;">
                 <span class="tag tag-{{ c.content_type }}">
                     <i class="ri-{% if c.content_type == 'video' %}video{% else %}article{% endif %}-line" style="margin-right:3px;"></i>
                     {{ '视频' if c.content_type == 'video' else '文章' }}
@@ -59,7 +59,7 @@
                 {% if c.processed_at %} · 处理于 {{ c.processed_at.strftime('%H:%M') }}{% endif %}
             </div>
         </div>
-        <div style="display:flex;flex-direction:column;gap:6px;">
+        <div style="display:flex;flex-direction:column;gap:6px;flex-shrink:0;">
             {% if c.status == 'done' and c.note_id %}
             <a href="{{ url_for('notes.view_note', note_id=c.note_id) }}" class="btn btn-ghost btn-sm"><i class="ri-eye-line"></i> 查看</a>
             {% elif c.status == 'error' %}

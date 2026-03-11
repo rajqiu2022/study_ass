@@ -42,7 +42,10 @@ def create_app(config_class=Config):
     app.register_blueprint(finance_bp)
 
     with app.app_context():
-        db.create_all()
+        try:
+            db.create_all()
+        except Exception as e:
+            app.logger.warning(f"db.create_all() skipped: {e}")
         _init_admin(app)
 
     return app
@@ -50,13 +53,16 @@ def create_app(config_class=Config):
 
 def _init_admin(app):
     """Initialize default admin user if not exists."""
-    from app.models import User
-    admin = User.query.filter_by(username='admin').first()
-    if not admin:
-        admin = User(
-            username='admin',
-            role='admin'
-        )
-        admin.set_password('123321')
-        db.session.add(admin)
-        db.session.commit()
+    try:
+        from app.models import User
+        admin = User.query.filter_by(username='admin').first()
+        if not admin:
+            admin = User(
+                username='admin',
+                role='admin'
+            )
+            admin.set_password('123321')
+            db.session.add(admin)
+            db.session.commit()
+    except Exception as e:
+        app.logger.warning(f"_init_admin() skipped: {e}")

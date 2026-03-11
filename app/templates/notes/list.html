@@ -9,10 +9,10 @@
 {% block content %}
 <div class="card" style="margin-bottom:20px;padding:14px 18px;">
     <form method="GET" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
-        <div style="flex:1;min-width:180px;">
+        <div style="flex:1;min-width:150px;">
             <input type="text" name="search" class="form-input" placeholder="搜索标题、内容、标签..." value="{{ search }}" style="border:none;background:transparent;">
         </div>
-        <select name="folder" class="form-select" style="width:auto;min-width:130px;background:var(--bg);">
+        <select name="folder" class="form-select" style="width:auto;min-width:110px;background:var(--bg);">
             <option value="">所有文件夹</option>
             {% for f in folders %}<option value="{{ f }}" {{ 'selected' if current_folder==f }}>{{ f }}</option>{% endfor %}
         </select>

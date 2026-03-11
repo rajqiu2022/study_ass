@@ -196,6 +196,31 @@
         box-shadow:0 4px 12px rgba(0,0,0,0.3);
     }
     .trend-bar:hover .bar-tooltip { display:block; }
+
+    /* ===== Finance Mobile ===== */
+    @media (max-width: 768px) {
+        .date-filter {
+            flex-direction:column; align-items:stretch; gap:8px;
+        }
+        .date-filter input[type="date"] { width:100%; }
+        .quick-range { flex-wrap:wrap; }
+        .quick-range button { flex:1; min-width:60px; text-align:center; }
+        .finance-stats { grid-template-columns:repeat(2,1fr); gap:10px; }
+        .finance-stat { padding:14px 16px; }
+        .finance-stat-value { font-size:20px; }
+        .charts-row { grid-template-columns:1fr; gap:14px; }
+        .chart-card { padding:14px; }
+        .cat-bar-name { min-width:48px; font-size:11px; }
+        .record-row { padding:10px 14px; gap:10px; }
+        .record-icon { width:32px; height:32px; font-size:14px; }
+        .record-amount { font-size:13px; }
+        .records-header { padding:12px 14px; }
+        .add-modal { width:92vw; padding:18px; }
+        .trend-chart { height:130px; }
+    }
+    @media (max-width: 480px) {
+        .finance-stats { grid-template-columns:1fr; }
+    }
 </style>
 {% endblock %}
 

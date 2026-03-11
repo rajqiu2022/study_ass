@@ -259,13 +259,64 @@
     .typing-dot { animation:blink 1.2s infinite; }
     .typing-dot:nth-child(2) { animation-delay:0.2s; }
     .typing-dot:nth-child(3) { animation-delay:0.4s; }
+
+    /* Mobile toggle button for conv sidebar */
+    .conv-mobile-toggle {
+        display:none; background:none; border:1px solid var(--border);
+        border-radius:var(--radius-sm); color:var(--text-secondary);
+        font-size:12px; cursor:pointer; padding:6px 10px;
+        align-items:center; gap:4px;
+    }
+    .conv-sidebar-overlay {
+        display:none; position:fixed; top:0; left:0; right:0; bottom:0;
+        background:rgba(0,0,0,0.5); z-index:149;
+    }
+
+    /* ===== Chat Mobile ===== */
+    @media (max-width: 768px) {
+        .content { height:calc(100vh - 52px) !important; }
+        .conv-mobile-toggle { display:inline-flex; }
+        .conv-sidebar {
+            position:fixed; left:0; top:0; bottom:0;
+            z-index:150; width:280px;
+            transform:translateX(-100%);
+            transition:transform 0.3s ease;
+        }
+        .conv-sidebar.open { transform:translateX(0); }
+        .conv-sidebar-overlay.open { display:block; }
+        .chat-main { width:100%; }
+        .chat-msgs-wrap { padding:14px 12px; gap:12px; }
+        .chat-msg { max-width:90%; padding:10px 14px; font-size:13px; }
+        .chat-input-area { padding:10px 12px 14px; }
+        .chat-input-toolbar { flex-wrap:wrap; gap:4px; margin-bottom:6px; }
+        .chat-input-row { gap:8px; }
+        .chat-input-row textarea { font-size:14px; min-height:40px; }
+        .chat-send-btn { width:40px; height:40px; font-size:16px; }
+        .chat-welcome { padding:24px 16px; }
+        .chat-welcome h2 { font-size:18px; }
+        .chat-welcome p { font-size:12px; }
+        .welcome-cards { grid-template-columns:1fr 1fr; gap:8px; max-width:100%; }
+        .welcome-card { padding:10px 12px; }
+        .welcome-card-title { font-size:11px; }
+        .welcome-card-desc { font-size:10px; }
+        .summary-expanded { max-width:100%; font-size:11px; padding:10px 12px; }
+        .save-modal { width:92vw; padding:18px; }
+        .msg-actions { display:flex; gap:4px; margin-top:6px; }
+        .msg-action-btn { font-size:10px; padding:3px 8px; }
+    }
+
+    @media (max-width: 480px) {
+        .welcome-cards { grid-template-columns:1fr; }
+    }
 </style>
 {% endblock %}
 
 {% block content %}
 {% if llm_provider %}
+<!-- Conv Sidebar Overlay (mobile) -->
+<div class="conv-sidebar-overlay" id="convOverlay" onclick="closeConvSidebar()"></div>
 <!-- Conversation Sidebar -->
-<div class="conv-sidebar">
+<div class="conv-sidebar" id="convSidebar">
     <div class="conv-sidebar-header">
         <h3><i class="ri-chat-3-line"></i> 对话记录</h3>
         <button class="btn btn-primary btn-sm" onclick="newConversation()" title="新建对话">
@@ -334,6 +385,9 @@
     <!-- Input Area -->
     <div class="chat-input-area">
         <div class="chat-input-toolbar">
+            <button class="conv-mobile-toggle" onclick="toggleConvSidebar()">
+                <i class="ri-chat-3-line"></i> 对话列表
+            </button>
             <button class="toolbar-btn" id="searchToggle" onclick="toggleSearch()" title="开启后会联网搜索最新信息">
                 <i class="ri-global-line"></i> 联网搜索
             </button>
@@ -352,6 +406,11 @@
     {% else %}
     <!-- Welcome -->
     <div class="chat-welcome">
+        <div style="width:100%;text-align:left;margin-bottom:10px;">
+            <button class="conv-mobile-toggle" onclick="toggleConvSidebar()">
+                <i class="ri-chat-3-line"></i> 对话列表
+            </button>
+        </div>
         <i class="ri-robot-2-line"></i>
         <h2>AI 知识助手</h2>
         <p>我能帮你解决各种问题，还能联网搜索和分析网页内容</p>
@@ -408,6 +467,16 @@ let searchEnabled = false;
 const chatMsgs = document.getElementById('chatMsgs');
 const chatInput = document.getElementById('chatInput');
 const sendBtn = document.getElementById('sendBtn');
+
+// --- Conv sidebar toggle (mobile) ---
+function toggleConvSidebar(){
+    document.getElementById('convSidebar').classList.toggle('open');
+    document.getElementById('convOverlay').classList.toggle('open');
+}
+function closeConvSidebar(){
+    document.getElementById('convSidebar').classList.remove('open');
+    document.getElementById('convOverlay').classList.remove('open');
+}
 
 // --- Configure marked ---
 if (typeof marked !== 'undefined') {

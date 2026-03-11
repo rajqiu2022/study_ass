@@ -467,6 +467,47 @@ def _auto_title(conversation, first_message, api_base, api_key, model):
         db.session.commit()
 
 
+def _classify_and_extract_topic(message, api_base, api_key, model):
+    """Use LLM to classify if a message is learning-related or casual chat,
+    and extract a concise topic keyword.
+    Returns: (is_learning: bool, topic: str)
+    """
+    try:
+        prompt = [
+            {'role': 'system', 'content': '''你是一个消息分类助手。判断用户的消息是"学习/知识/技能相关"还是"闲聊/日常/情感"。
+
+分类标准：
+- 学习相关：涉及知识学习、技术问题、编程、数学、科学、语言学习、考试备考、专业技能、工作方法论、学术研究、读书笔记等有知识价值的内容
+- 闲聊：日常寒暄、情感倾诉、闲谈、笑话、天气、打招呼、无具体知识点的随意聊天、纯粹的生活琐事
+
+严格以 JSON 格式输出，不要输出任何其他内容：
+{
+  "is_learning": true或false,
+  "topic": "精炼的主题关键词（2-8个字）"
+}
+
+规则：
+1. topic 必须是精炼的关键词，不是完整句子，例如："Python排序算法"、"微积分求导"、"英语语法"
+2. 如果是闲聊，topic 填写用户的兴趣方向，例如："美食"、"电影"、"旅行"、"心情"
+3. 只输出 JSON，不要有其他文字'''},
+            {'role': 'user', 'content': message[:200]}
+        ]
+        result = _call_llm(api_base, api_key, model, prompt, max_tokens=100, temperature=0.1)
+        # Clean up
+        result = re.sub(r'<think>.*?</think>', '', result, flags=re.DOTALL).strip()
+        result = re.sub(r'^```(?:json)?\s*', '', result, flags=re.MULTILINE)
+        result = re.sub(r'```\s*$', '', result, flags=re.MULTILINE)
+        result = result.strip()
+
+        data = json.loads(result)
+        is_learning = bool(data.get('is_learning', True))
+        topic = str(data.get('topic', ''))[:50]
+        return is_learning, topic
+    except Exception:
+        # Fallback: treat as learning, use truncated message
+        return True, message[:30]
+
+
 # ===================== Routes =====================
 
 @assistant_bp.route('/')
@@ -595,12 +636,19 @@ def send_message():
     conv.updated_at = datetime.utcnow()
     db.session.commit()
 
-    # Record activity
+    # Record activity - classify message first
+    try:
+        is_learning, topic = _classify_and_extract_topic(
+            message, api_base, api_key, model)
+    except Exception:
+        is_learning, topic = True, message[:30]
+
     activity = LearningActivity(
         user_id=current_user.id,
         activity_type='ai_query',
         content=message[:500],
-        topic=message[:50]
+        topic=topic,
+        is_learning=is_learning
     )
     db.session.add(activity)
     db.session.commit()

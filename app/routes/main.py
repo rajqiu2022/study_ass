@@ -30,7 +30,8 @@ def dashboard():
         LearningActivity.topic, func.count(LearningActivity.id)
     ).filter(
         LearningActivity.user_id == current_user.id,
-        LearningActivity.topic != ''
+        LearningActivity.topic != '',
+        LearningActivity.is_learning == True
     ).group_by(LearningActivity.topic)\
      .order_by(func.count(LearningActivity.id).desc())\
      .limit(10).all()
@@ -90,7 +91,8 @@ def profile():
         LearningActivity.topic, func.count(LearningActivity.id)
     ).filter(
         LearningActivity.user_id == current_user.id,
-        LearningActivity.topic != ''
+        LearningActivity.topic != '',
+        LearningActivity.is_learning == True
     ).group_by(LearningActivity.topic)\
      .order_by(func.count(LearningActivity.id).desc())\
      .limit(10).all()

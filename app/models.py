@@ -95,6 +95,7 @@ class LearningActivity(db.Model):
     activity_type = db.Column(db.String(50), nullable=False)
     content = db.Column(db.Text, default='')
     topic = db.Column(db.String(200), default='')
+    is_learning = db.Column(db.Boolean, default=True)  # True=学习相关, False=闲聊/兴趣
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     
     def __repr__(self):

@@ -198,9 +198,21 @@ def note_list():
         .distinct().order_by(Note.folder).all()
     folders = [f[0] for f in folders]
     
+    # Count notes per category (unfiltered by category, but respecting folder/search)
+    base_query = Note.query.filter_by(user_id=current_user.id)
+    if folder:
+        base_query = base_query.filter(Note.folder.like(f'%{folder}%'))
+    all_notes_for_count = base_query.all()
+    total_count = len(all_notes_for_count)
+    category_counts = {'__all__': total_count}
+    for n in all_notes_for_count:
+        cat = n.category or 'general'
+        category_counts[cat] = category_counts.get(cat, 0) + 1
+    
     return render_template('notes/list.html', notes=notes, folders=folders,
                            current_folder=folder, search=search,
-                           current_category=category, categories=CATEGORIES)
+                           current_category=category, categories=CATEGORIES,
+                           category_counts=category_counts)
 
 
 @notes_bp.route('/new', methods=['GET', 'POST'])

@@ -207,6 +207,37 @@
         .note-card-title { font-size:14px; font-weight:600; margin-bottom:6px; }
         .note-card-excerpt { font-size:12px; color:var(--text-secondary); line-height:1.5; display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden; }
         .note-card-meta { display:flex; align-items:center; gap:10px; margin-top:10px; font-size:11px; color:var(--text-muted); flex-wrap:wrap; }
+        .note-card-tags { display:flex; gap:6px; margin-top:10px; flex-wrap:wrap; padding-top:10px; border-top:1px solid var(--border); }
+        .note-tag {
+            display:inline-flex; align-items:center; gap:3px;
+            padding:2px 8px; border-radius:12px;
+            font-size:10px; font-weight:500;
+            background:rgba(99,102,241,0.08); color:var(--accent-hover);
+            border:1px solid rgba(99,102,241,0.15);
+        }
+
+        /* Category filter buttons */
+        .cat-btn {
+            display:inline-flex; align-items:center; gap:5px;
+            padding:7px 14px; border-radius:20px;
+            font-size:12px; font-weight:500;
+            background:var(--bg-card); color:var(--text-secondary);
+            border:1px solid var(--border);
+            text-decoration:none; transition:all 0.15s; cursor:pointer;
+        }
+        .cat-btn:hover { background:var(--bg-hover); color:var(--text); border-color:var(--accent); }
+        .cat-btn-active {
+            background:var(--accent-glow); color:var(--accent-hover);
+            border-color:var(--accent); box-shadow:0 0 12px var(--accent-glow);
+        }
+        .cat-btn i { font-size:14px; }
+        .cat-count {
+            display:inline-flex; align-items:center; justify-content:center;
+            min-width:18px; height:18px; padding:0 5px;
+            border-radius:9px; font-size:10px; font-weight:600;
+            background:rgba(255,255,255,0.08); color:var(--text-muted);
+        }
+        .cat-btn-active .cat-count { background:rgba(99,102,241,0.25); color:var(--accent-hover); }
 
         /* Grid layout */
         .grid-2 { display:grid; grid-template-columns:1fr 1fr; gap:22px; }

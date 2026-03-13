@@ -7,37 +7,49 @@
 {% endblock %}
 
 {% block content %}
+<!-- 分类按钮栏 -->
+<div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap;align-items:center;">
+    <a href="{{ url_for('notes.note_list', folder=current_folder, search=search) }}"
+       class="cat-btn{% if not current_category %} cat-btn-active{% endif %}">
+        <i class="ri-apps-line"></i> 全部
+        {% if category_counts.get('__all__', 0) > 0 %}
+        <span class="cat-count">{{ category_counts.get('__all__', 0) }}</span>
+        {% endif %}
+    </a>
+    {% for v, l in categories %}
+    {% set icon_map = {'general':'ri-global-line','work':'ri-briefcase-line','study':'ri-book-open-line','life':'ri-heart-line','tech':'ri-code-s-slash-line','finance':'ri-money-cny-circle-line','health':'ri-heart-pulse-line'} %}
+    {% if category_counts.get(v, 0) > 0 %}
+    <a href="{{ url_for('notes.note_list', category=v, folder=current_folder, search=search) }}"
+       class="cat-btn{% if current_category == v %} cat-btn-active{% endif %}">
+        <i class="{{ icon_map.get(v, 'ri-folder-line') }}"></i> {{ l }}
+        <span class="cat-count">{{ category_counts.get(v, 0) }}</span>
+    </a>
+    {% endif %}
+    {% endfor %}
+</div>
+
+<!-- 搜索 & 文件夹筛选 -->
 <div class="card" style="margin-bottom:20px;padding:14px 18px;">
     <form method="GET" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+        <input type="hidden" name="category" value="{{ current_category }}">
         <div style="flex:1;min-width:150px;">
             <input type="text" name="search" class="form-input" placeholder="智能搜索：描述你想找的内容..." value="{{ search }}" style="border:none;background:transparent;">
         </div>
-        <select name="category" class="form-select" style="width:auto;min-width:90px;background:var(--bg);">
-            <option value="">所有分类</option>
-            {% for v, l in categories %}<option value="{{ v }}" {{ 'selected' if current_category==v }}>{{ l }}</option>{% endfor %}
-        </select>
         <select name="folder" class="form-select" style="width:auto;min-width:110px;background:var(--bg);">
             <option value="">所有文件夹</option>
             {% for f in folders %}<option value="{{ f }}" {{ 'selected' if current_folder==f }}>{{ f }}</option>{% endfor %}
         </select>
         <button type="submit" class="btn btn-primary btn-sm"><i class="ri-search-line"></i> 搜索</button>
-        {% if search or current_folder or current_category %}<a href="{{ url_for('notes.note_list') }}" class="btn btn-ghost btn-sm"><i class="ri-close-line"></i></a>{% endif %}
+        {% if search or current_folder or current_category %}<a href="{{ url_for('notes.note_list') }}" class="btn btn-ghost btn-sm" title="清除所有筛选"><i class="ri-close-line"></i></a>{% endif %}
     </form>
 </div>
 
-{% if current_category or current_folder %}
+{% if current_folder %}
 <div style="display:flex;gap:6px;margin-bottom:14px;flex-wrap:wrap;align-items:center;">
     <span style="font-size:12px;color:var(--text-muted);">筛选：</span>
-    {% if current_category %}
-    <a href="{{ url_for('notes.note_list', folder=current_folder, search=search) }}" class="tag" style="font-size:11px;cursor:pointer;display:inline-flex;align-items:center;gap:4px;">
-        {{ dict(categories).get(current_category, current_category) }} <i class="ri-close-line" style="font-size:10px;"></i>
-    </a>
-    {% endif %}
-    {% if current_folder %}
     <a href="{{ url_for('notes.note_list', category=current_category, search=search) }}" class="tag" style="font-size:11px;cursor:pointer;display:inline-flex;align-items:center;gap:4px;">
         <i class="ri-folder-line"></i> {{ current_folder }} <i class="ri-close-line" style="font-size:10px;"></i>
     </a>
-    {% endif %}
 </div>
 {% endif %}
 
@@ -55,9 +67,17 @@
         <div class="note-card-meta">
             <span class="tag tag-{{ n.category or 'topic' }}" style="font-size:10px;">{{ {'work':'工作','study':'学习','life':'生活','tech':'技术','finance':'理财','health':'健康'}.get(n.category, '通用') }}</span>
             <span><i class="ri-folder-line"></i> {{ n.folder }}</span>
-            {% if n.tags %}<span><i class="ri-price-tag-3-line"></i> {{ n.tags[:25] }}</span>{% endif %}
             <span><i class="ri-time-line"></i> {{ n.updated_at.strftime('%m-%d %H:%M') }}</span>
         </div>
+        {% if n.tags %}
+        <div class="note-card-tags">
+            {% for tag in n.tags.split(',') %}
+            {% if tag.strip() %}
+            <span class="note-tag"><i class="ri-price-tag-3-line" style="font-size:10px;"></i> {{ tag.strip() }}</span>
+            {% endif %}
+            {% endfor %}
+        </div>
+        {% endif %}
     </a>
     {% endfor %}
 </div>

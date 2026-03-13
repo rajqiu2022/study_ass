@@ -31,6 +31,7 @@ def create_app(config_class=Config):
     from app.routes.collect import collect_bp
     from app.routes.assistant import assistant_bp
     from app.routes.finance import finance_bp
+    from app.routes.bot_api import bot_api_bp
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(main_bp)
@@ -40,6 +41,7 @@ def create_app(config_class=Config):
     app.register_blueprint(collect_bp)
     app.register_blueprint(assistant_bp)
     app.register_blueprint(finance_bp)
+    app.register_blueprint(bot_api_bp)
 
     with app.app_context():
         try:

@@ -1,8 +1,9 @@
 from functools import wraps
+from sqlalchemy import func
 from flask import Blueprint, render_template, request, flash, redirect, url_for, jsonify
 from flask_login import login_required, current_user
 from app import db
-from app.models import User, Note, LearningActivity, SystemConfig
+from app.models import User, Note, LearningActivity, SystemConfig, Conversation, ContentCollection, FinanceRecord
 
 admin_bp = Blueprint('admin', __name__, url_prefix='/admin')
 
@@ -31,6 +32,7 @@ def admin_dashboard():
     llm_model = SystemConfig.get('llm_model', '')
     llm_api_key = SystemConfig.get('llm_api_key', '')
     llm_api_base = SystemConfig.get('llm_api_base', '')
+    bot_api_token = SystemConfig.get('bot_api_token', '')
     
     return render_template('admin/dashboard.html',
                            user_count=user_count,
@@ -40,7 +42,8 @@ def admin_dashboard():
                            llm_provider=llm_provider,
                            llm_model=llm_model,
                            llm_api_key=llm_api_key,
-                           llm_api_base=llm_api_base)
+                           llm_api_base=llm_api_base,
+                           bot_api_token=bot_api_token)
 
 
 @admin_bp.route('/llm-settings', methods=['POST'])
@@ -58,6 +61,47 @@ def llm_settings():
     
     flash('大模型设置已更新，所有用户将使用此配置', 'success')
     return redirect(url_for('admin.admin_dashboard'))
+
+
+@admin_bp.route('/users')
+@admin_required
+def user_management():
+    """User management page with detailed user info."""
+    # Subquery: note count per user
+    note_counts = db.session.query(
+        Note.user_id, func.count(Note.id).label('note_count')
+    ).group_by(Note.user_id).subquery()
+
+    # Subquery: conversation count per user
+    conv_counts = db.session.query(
+        Conversation.user_id, func.count(Conversation.id).label('conv_count')
+    ).group_by(Conversation.user_id).subquery()
+
+    # Subquery: collection count per user
+    coll_counts = db.session.query(
+        ContentCollection.user_id, func.count(ContentCollection.id).label('coll_count')
+    ).group_by(ContentCollection.user_id).subquery()
+
+    users_q = db.session.query(
+        User,
+        func.coalesce(note_counts.c.note_count, 0).label('note_count'),
+        func.coalesce(conv_counts.c.conv_count, 0).label('conv_count'),
+        func.coalesce(coll_counts.c.coll_count, 0).label('coll_count'),
+    ).outerjoin(note_counts, User.id == note_counts.c.user_id)\
+     .outerjoin(conv_counts, User.id == conv_counts.c.user_id)\
+     .outerjoin(coll_counts, User.id == coll_counts.c.user_id)\
+     .order_by(User.created_at.desc()).all()
+
+    users_data = []
+    for row in users_q:
+        users_data.append({
+            'user': row[0],
+            'note_count': row[1],
+            'conv_count': row[2],
+            'coll_count': row[3],
+        })
+
+    return render_template('admin/users.html', users_data=users_data)
 
 
 @admin_bp.route('/user/<int:user_id>')

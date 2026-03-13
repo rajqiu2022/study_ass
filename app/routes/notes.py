@@ -1,11 +1,123 @@
 import os
+import json
+import urllib.request
 import markdown
 from flask import Blueprint, render_template, request, flash, redirect, url_for, current_app
 from flask_login import login_required, current_user
 from app import db
-from app.models import Note, LearningActivity
+from app.models import Note, LearningActivity, SystemConfig
 
 notes_bp = Blueprint('notes', __name__, url_prefix='/notes')
+
+# ============ LLM helpers ============
+
+CATEGORIES = [
+    ('general', '通用'), ('work', '工作'), ('study', '学习'),
+    ('life', '生活'), ('tech', '技术'), ('finance', '理财'), ('health', '健康')
+]
+CAT_KEYS = [c[0] for c in CATEGORIES]
+
+
+def _get_llm_config():
+    provider = SystemConfig.get('llm_provider', '')
+    model = SystemConfig.get('llm_model', '')
+    api_key = SystemConfig.get('llm_api_key', '')
+    api_base = SystemConfig.get('llm_api_base', '')
+    if not api_base and provider:
+        bases = {
+            'openai': 'https://api.openai.com/v1',
+            'deepseek': 'https://api.deepseek.com/v1',
+            'zhipu': 'https://open.bigmodel.cn/api/paas/v4',
+            'moonshot': 'https://api.moonshot.cn/v1',
+            'qwen': 'https://dashscope.aliyuncs.com/compatible-mode/v1',
+        }
+        api_base = bases.get(provider, '')
+    return provider, model, api_key, api_base
+
+
+def _call_llm(api_base, api_key, model, messages, max_tokens=500, temperature=0.1):
+    url = f'{api_base.rstrip("/")}/chat/completions'
+    payload = json.dumps({
+        'model': model, 'messages': messages,
+        'temperature': temperature, 'max_tokens': max_tokens
+    }).encode('utf-8')
+    headers = {'Content-Type': 'application/json', 'Authorization': f'Bearer {api_key}'}
+    req = urllib.request.Request(url, data=payload, headers=headers, method='POST')
+    with urllib.request.urlopen(req, timeout=30) as resp:
+        result = json.loads(resp.read().decode('utf-8'))
+        return result['choices'][0]['message']['content']
+
+
+def _auto_classify(title, content, tags):
+    """Use AI to auto-classify note into one of the predefined categories."""
+    provider, model, api_key, api_base = _get_llm_config()
+    if not api_key:
+        return 'general'
+    try:
+        cat_str = ', '.join(CAT_KEYS)
+        prompt = f"""根据以下笔记内容，判断它最适合的分类。
+可选分类：{cat_str}
+只需返回一个分类的英文key，不要其他内容。
+
+标题：{title}
+标签：{tags}
+内容摘要：{content[:500]}"""
+        result = _call_llm(api_base, api_key, model,
+                           [{'role': 'user', 'content': prompt}],
+                           max_tokens=20, temperature=0.1).strip().lower()
+        return result if result in CAT_KEYS else 'general'
+    except Exception:
+        return 'general'
+
+
+def _semantic_search(search_query, notes):
+    """Use AI to rank notes by semantic relevance to the search query."""
+    provider, model, api_key, api_base = _get_llm_config()
+    if not api_key or not notes:
+        return notes
+
+    try:
+        notes_info = []
+        for n in notes[:50]:  # Limit to 50 notes to avoid token overflow
+            notes_info.append({
+                'id': n.id,
+                'title': n.title,
+                'tags': n.tags or '',
+                'category': n.category or '',
+                'excerpt': (n.content or '')[:150]
+            })
+
+        prompt = f"""用户搜索："{search_query}"
+
+以下是笔记列表（JSON格式）：
+{json.dumps(notes_info, ensure_ascii=False)}
+
+请根据搜索意图，返回与搜索最相关的笔记ID列表（从最相关到最不相关排序）。
+只返回JSON数组格式的ID列表，如 [3, 1, 7]。完全不相关的笔记不要包含在内。"""
+
+        result = _call_llm(api_base, api_key, model,
+                           [{'role': 'user', 'content': prompt}],
+                           max_tokens=200, temperature=0.1).strip()
+
+        # Parse the returned ID list
+        # Handle cases where AI wraps in markdown code block
+        if '```' in result:
+            result = result.split('```')[1]
+            if result.startswith('json'):
+                result = result[4:]
+        ranked_ids = json.loads(result.strip())
+
+        # Reorder notes by the ranked IDs
+        note_map = {n.id: n for n in notes}
+        ranked = [note_map[nid] for nid in ranked_ids if nid in note_map]
+        # Append any notes not in the ranked list at the end
+        ranked_set = set(ranked_ids)
+        for n in notes:
+            if n.id not in ranked_set:
+                ranked.append(n)
+        return ranked
+    except Exception:
+        return notes
 
 
 def _sync_note_to_obsidian(note, user):
@@ -66,29 +178,29 @@ def _extract_topics_from_tags(tags_str):
 def note_list():
     folder = request.args.get('folder', '')
     search = request.args.get('search', '')
+    category = request.args.get('category', '')
     
     query = Note.query.filter_by(user_id=current_user.id)
     
     if folder:
         query = query.filter(Note.folder.like(f'%{folder}%'))
-    if search:
-        query = query.filter(
-            db.or_(
-                Note.title.ilike(f'%{search}%'),
-                Note.content.ilike(f'%{search}%'),
-                Note.tags.ilike(f'%{search}%')
-            )
-        )
-        _record_activity('search', f'搜索: {search}', search)
+    if category:
+        query = query.filter(Note.category == category)
     
     notes = query.order_by(Note.updated_at.desc()).all()
+    
+    # Use AI semantic search if search query is provided
+    if search:
+        notes = _semantic_search(search, notes)
+        _record_activity('search', f'搜索: {search}', search)
     
     folders = db.session.query(Note.folder).filter_by(user_id=current_user.id)\
         .distinct().order_by(Note.folder).all()
     folders = [f[0] for f in folders]
     
     return render_template('notes/list.html', notes=notes, folders=folders,
-                           current_folder=folder, search=search)
+                           current_folder=folder, search=search,
+                           current_category=category, categories=CATEGORIES)
 
 
 @notes_bp.route('/new', methods=['GET', 'POST'])
@@ -103,7 +215,11 @@ def new_note():
         
         if not title:
             flash('请输入标题', 'error')
-            return render_template('notes/edit.html', note=None, folders=[])
+            return render_template('notes/edit.html', note=None, folders=[], categories=CATEGORIES)
+        
+        # Auto-classify if user didn't pick a specific category
+        if category == 'auto' or category == 'general':
+            category = _auto_classify(title, content, tags)
         
         note = Note(
             user_id=current_user.id,
@@ -127,7 +243,7 @@ def new_note():
         .distinct().order_by(Note.folder).all()
     folders = [f[0] for f in folders]
     
-    return render_template('notes/edit.html', note=None, folders=folders)
+    return render_template('notes/edit.html', note=None, folders=folders, categories=CATEGORIES)
 
 
 @notes_bp.route('/<int:note_id>')
@@ -157,7 +273,12 @@ def edit_note(note_id):
         note.content = request.form.get('content', '')
         note.folder = request.form.get('folder', '/').strip() or '/'
         note.tags = request.form.get('tags', '').strip()
-        note.category = request.form.get('category', 'general').strip()
+        category = request.form.get('category', 'general').strip()
+        
+        # Auto-classify if user chose auto
+        if category == 'auto':
+            category = _auto_classify(note.title, note.content, note.tags)
+        note.category = category
         db.session.commit()
         
         _sync_note_to_obsidian(note, current_user)
@@ -170,7 +291,7 @@ def edit_note(note_id):
         .distinct().order_by(Note.folder).all()
     folders = [f[0] for f in folders]
     
-    return render_template('notes/edit.html', note=note, folders=folders)
+    return render_template('notes/edit.html', note=note, folders=folders, categories=CATEGORIES)
 
 
 @notes_bp.route('/<int:note_id>/delete', methods=['POST'])

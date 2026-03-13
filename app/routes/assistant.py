@@ -12,6 +12,7 @@ import re
 import urllib.request
 import urllib.error
 import urllib.parse
+from types import SimpleNamespace
 from html.parser import HTMLParser
 from datetime import datetime
 from flask import Blueprint, render_template, request, jsonify
@@ -115,85 +116,122 @@ def _call_llm(api_base, api_key, model, messages, max_tokens=3000, temperature=0
 # ===================== Web Search =====================
 
 def _web_search(query, num_results=5):
-    """Search the web using a search API. Falls back to DuckDuckGo HTML scraping."""
+    """Search the web using Bing (cn.bing.com) as primary search engine.
+    Falls back to Sogou if Bing fails. DuckDuckGo is not accessible from China.
+    """
     results = []
 
-    # Method 1: Try DuckDuckGo Instant Answer API
+    _HEADERS = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
+    }
+
+    # Method 1: Bing China (cn.bing.com) - reliable from China
     try:
         encoded_q = urllib.parse.quote(query)
-        url = f'https://api.duckduckgo.com/?q={encoded_q}&format=json&no_html=1&skip_disambig=1'
-        req = urllib.request.Request(url, headers={
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-        })
+        url = f'https://cn.bing.com/search?q={encoded_q}&ensearch=0'
+        req = urllib.request.Request(url, headers=_HEADERS)
         with urllib.request.urlopen(req, timeout=10) as resp:
-            data = json.loads(resp.read().decode('utf-8'))
+            html = resp.read().decode('utf-8', errors='ignore')
 
-            # Abstract
-            if data.get('Abstract'):
-                results.append({
-                    'title': data.get('Heading', query),
-                    'snippet': data['Abstract'][:500],
-                    'url': data.get('AbstractURL', '')
-                })
+            # Bing structure: <li class="b_algo"> blocks contain results
+            # Title: <h2><a href="URL">TITLE</a></h2>  (h2 may have class="" or other attrs)
+            # Snippet: <p class="b_lineclamp2">SNIPPET</p>
+            blocks = re.findall(
+                r'<li\s+class="b_algo"[^>]*>(.*?)</li>',
+                html, re.DOTALL
+            )
 
-            # Related topics
-            for topic in data.get('RelatedTopics', [])[:num_results]:
-                if isinstance(topic, dict) and topic.get('Text'):
-                    results.append({
-                        'title': topic.get('Text', '')[:100],
-                        'snippet': topic.get('Text', '')[:300],
-                        'url': topic.get('FirstURL', '')
-                    })
+            for block in blocks[:num_results]:
+                # Extract title and URL from <h2><a href="...">...</a></h2>
+                title_m = re.search(
+                    r'<h2[^>]*>\s*<a[^>]*href="([^"]*)"[^>]*>(.*?)</a>\s*</h2>',
+                    block, re.DOTALL
+                )
+                # Extract snippet from <p class="b_lineclamp2">...</p>
+                snippet_m = re.search(
+                    r'<p[^>]*class="b_lineclamp[^"]*"[^>]*>(.*?)</p>',
+                    block, re.DOTALL
+                )
+
+                if title_m:
+                    link = title_m.group(1)
+                    title = re.sub(r'<[^>]+>', '', title_m.group(2)).strip()
+                    snippet = ''
+                    if snippet_m:
+                        snippet = re.sub(r'<[^>]+>', '', snippet_m.group(1)).strip()
+                        # Clean HTML entities
+                        snippet = snippet.replace('&ensp;', ' ').replace('&#0183;', '·')
+                        snippet = re.sub(r'&\w+;', ' ', snippet)
+                        snippet = re.sub(r'&#\d+;', '', snippet)
+
+                    if title:
+                        results.append({
+                            'title': title[:200],
+                            'snippet': snippet[:400],
+                            'url': link
+                        })
     except Exception:
         pass
 
-    # Method 2: Fallback - scrape DuckDuckGo HTML search
+    # Method 2: Sogou search (backup, also accessible from China)
     if len(results) < 2:
         try:
             encoded_q = urllib.parse.quote(query)
-            url = f'https://html.duckduckgo.com/html/?q={encoded_q}'
-            req = urllib.request.Request(url, headers={
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-            })
+            url = f'https://www.sogou.com/web?query={encoded_q}'
+            req = urllib.request.Request(url, headers=_HEADERS)
             with urllib.request.urlopen(req, timeout=10) as resp:
                 html = resp.read().decode('utf-8', errors='ignore')
-                # Extract result snippets with regex
-                snippets = re.findall(
-                    r'class="result__snippet"[^>]*>(.*?)</a>', html, re.DOTALL
+
+                # Sogou structure: results in <div class="vrwrap"> or <div class="rb">
+                # Title links: <h3><a href="..." >TITLE</a></h3>
+                # Snippets: <p class="star-wiki"> or <div class="ft">
+                title_links = re.findall(
+                    r'<h3[^>]*>\s*<a[^>]*href="([^"]*)"[^>]*>(.*?)</a>\s*</h3>',
+                    html, re.DOTALL
                 )
-                titles = re.findall(
-                    r'class="result__a"[^>]*>(.*?)</a>', html, re.DOTALL
-                )
-                urls = re.findall(
-                    r'class="result__url"[^>]*>(.*?)</a>', html, re.DOTALL
-                )
-                for i in range(min(num_results, len(snippets))):
-                    title = re.sub(r'<[^>]+>', '', titles[i]).strip() if i < len(titles) else ''
-                    snippet = re.sub(r'<[^>]+>', '', snippets[i]).strip()
-                    link = re.sub(r'<[^>]+>', '', urls[i]).strip() if i < len(urls) else ''
-                    if snippet:
-                        results.append({
-                            'title': title,
-                            'snippet': snippet[:300],
-                            'url': link
-                        })
+
+                existing_urls = {r.get('url', '') for r in results}
+                for link, raw_title in title_links[:num_results]:
+                    title = re.sub(r'<[^>]+>', '', raw_title).strip()
+                    if not title or link in existing_urls:
+                        continue
+                    results.append({
+                        'title': title[:200],
+                        'snippet': '',  # Sogou snippet extraction is complex, title is sufficient
+                        'url': link
+                    })
+                    existing_urls.add(link)
         except Exception:
             pass
 
-    return results[:num_results]
+    # Deduplicate by URL
+    seen_urls = set()
+    unique_results = []
+    for r in results:
+        url_key = r.get('url', '').rstrip('/')
+        if url_key and url_key in seen_urls:
+            continue
+        seen_urls.add(url_key)
+        unique_results.append(r)
+
+    return unique_results[:num_results]
 
 
 def _format_search_results(results):
     """Format search results into text for LLM context."""
     if not results:
         return '未找到相关搜索结果。'
-    parts = ['以下是互联网搜索结果：\n']
+    today = datetime.now().strftime('%Y年%m月%d日')
+    parts = [f'以下是互联网搜索结果（搜索时间：{today}）：\n']
     for i, r in enumerate(results, 1):
         parts.append(f'{i}. **{r["title"]}**')
         parts.append(f'   {r["snippet"]}')
         if r.get('url'):
             parts.append(f'   来源: {r["url"]}')
         parts.append('')
+    parts.append('请基于以上搜索结果回答用户的问题，注意引用信息来源。')
     return '\n'.join(parts)
 
 
@@ -279,10 +317,19 @@ def _detect_intent(message):
         '记账', '记一笔', '记录一下',
         '块', '元', '￥', '¥'
     ]
+    # Keywords for modifying/deleting existing records
+    finance_modify_keywords = [
+        '改成', '改为', '修改', '改一下', '更正', '更改',
+        '其实是', '不对', '应该是', '搞错了', '写错了', '记错了',
+        '删掉', '删除', '取消', '撤销', '去掉那笔',
+        '那笔', '刚才那', '上一笔'
+    ]
     # Need at least one finance keyword AND a number to be considered finance
     has_finance_kw = any(kw in msg_lower for kw in finance_keywords)
     has_number = bool(re.search(r'\d+\.?\d*', message))
-    if has_finance_kw and has_number:
+    has_modify_kw = any(kw in msg_lower for kw in finance_modify_keywords)
+    # Trigger finance intent: (finance keyword + number) OR (modify keyword + number)
+    if (has_finance_kw and has_number) or (has_modify_kw and has_number):
         intent['is_finance'] = True
 
     return intent
@@ -290,9 +337,24 @@ def _detect_intent(message):
 
 # ===================== Finance Parsing =====================
 
-def _parse_finance_with_llm(message, api_base, api_key, model):
+def _get_recent_finance_records(user_id, limit=10):
+    """Get user's recent finance records for context."""
+    records = FinanceRecord.query.filter_by(user_id=user_id) \
+        .order_by(FinanceRecord.created_at.desc()).limit(limit).all()
+    if not records:
+        return ''
+    lines = ['用户最近的记账记录（id | 类型 | 金额 | 分类 | 描述 | 日期）：']
+    for r in records:
+        type_label = '支出' if r.record_type == 'expense' else '收入'
+        lines.append(f'  id={r.id} | {type_label} | ¥{r.amount:.2f} | {r.category} | {r.description} | {r.record_date}')
+    return '\n'.join(lines)
+
+
+def _parse_finance_with_llm(message, api_base, api_key, model, recent_records_context=''):
     """Use LLM to parse a finance record from user message.
-    Returns dict with: record_type, amount, category, description, record_date or None.
+    Returns dict with: action, record_type, amount, category, description, record_date,
+    and optionally target_id (for update/delete).
+    action can be: 'add', 'update', 'delete'.
     """
     today = date_type.today().strftime('%Y-%m-%d')
     categories_info = (
@@ -301,8 +363,12 @@ def _parse_finance_with_llm(message, api_base, api_key, model):
     )
     prompt = [
         {'role': 'system', 'content': f'''你是一个记账解析助手。今天是 {today}。
-用户会用自然语言描述一笔消费或收入，你需要从中提取以下信息，严格以 JSON 格式输出：
+用户会用自然语言描述记账操作，可能是新增、修改或删除。你需要判断用户的意图并提取信息。
+
+严格以 JSON 格式输出：
 {{
+  "action": "add" 或 "update" 或 "delete",
+  "target_id": null 或 已有记录的id数字,
   "record_type": "expense" 或 "income",
   "amount": 数字金额,
   "category": "分类名称",
@@ -312,17 +378,24 @@ def _parse_finance_with_llm(message, api_base, api_key, model):
 
 {categories_info}
 
-规则：
-1. 如果用户没有说具体日期，默认用今天 {today}
-2. 如果说"昨天"就用昨天的日期，"前天"用前天的日期
-3. 金额提取纯数字，不要带单位
-4. 从上面的预设分类中选择最匹配的，不要自创分类
-5. description 简洁概括，不超过20字
-6. 只输出 JSON，不要输出任何其他内容'''},
+{recent_records_context}
+
+判断规则：
+1. 如果用户说"改成"、"修改"、"改为"、"更正"、"改一下"、"不对，应该是"、"其实是"等，action 应为 "update"
+2. 如果用户说"删掉"、"删除"、"取消"、"撤销"、"去掉那笔"等，action 应为 "delete"
+3. 其他情况（记录新的消费/收入），action 为 "add"
+4. 对于 update 和 delete：根据用户描述的内容（分类、描述、金额等）匹配上面最近记录中最相似的一条，将其 id 填入 target_id
+5. 如果用户没有说具体日期，默认用今天 {today}
+6. 如果说"昨天"就用昨天的日期，"前天"用前天的日期
+7. 金额提取纯数字，不要带单位
+8. 从上面的预设分类中选择最匹配的，不要自创分类
+9. description 简洁概括，不超过20字
+10. 只输出 JSON，不要输出任何其他内容
+11. 对于 delete 操作，amount/category/description/record_date 可以保留原记录的值'''},
         {'role': 'user', 'content': message}
     ]
     try:
-        result = _call_llm(api_base, api_key, model, prompt, max_tokens=200, temperature=0.1)
+        result = _call_llm(api_base, api_key, model, prompt, max_tokens=300, temperature=0.1)
         # Clean up: remove thinking tags, markdown code blocks
         result = re.sub(r'<think>.*?</think>', '', result, flags=re.DOTALL).strip()
         result = re.sub(r'^```(?:json)?\s*', '', result, flags=re.MULTILINE)
@@ -330,18 +403,68 @@ def _parse_finance_with_llm(message, api_base, api_key, model):
         result = result.strip()
 
         data = json.loads(result)
-        # Validate
-        if data.get('record_type') not in ('expense', 'income'):
-            return None
-        if not isinstance(data.get('amount'), (int, float)) or data['amount'] <= 0:
-            return None
+        # Validate action
+        if data.get('action') not in ('add', 'update', 'delete'):
+            data['action'] = 'add'
+        # Validate basic fields for add/update
+        if data['action'] in ('add', 'update'):
+            if data.get('record_type') not in ('expense', 'income'):
+                return None
+            if not isinstance(data.get('amount'), (int, float)) or data['amount'] <= 0:
+                return None
         return data
     except Exception:
         return None
 
 
 def _save_finance_record(user_id, parsed):
-    """Save a parsed finance record to the database. Returns the record."""
+    """Save, update, or delete a finance record based on parsed action.
+    Returns (record, action_performed) tuple.
+    action_performed is 'add', 'update', or 'delete'.
+    """
+    action = parsed.get('action', 'add')
+    target_id = parsed.get('target_id')
+
+    # --- DELETE ---
+    if action == 'delete' and target_id:
+        record = FinanceRecord.query.filter_by(id=target_id, user_id=user_id).first()
+        if record:
+            deleted_info = {
+                'id': record.id,
+                'record_type': record.record_type,
+                'amount': record.amount,
+                'category': record.category,
+                'description': record.description,
+                'record_date': record.record_date,
+            }
+            db.session.delete(record)
+            db.session.commit()
+            # Return a namespace with the deleted info for display
+            r = SimpleNamespace(**deleted_info)
+            return r, 'delete'
+        # If target not found, fall through to add
+        action = 'add'
+
+    # --- UPDATE ---
+    if action == 'update' and target_id:
+        record = FinanceRecord.query.filter_by(id=target_id, user_id=user_id).first()
+        if record:
+            try:
+                record_date = datetime.strptime(parsed['record_date'], '%Y-%m-%d').date()
+            except (ValueError, KeyError):
+                record_date = record.record_date  # keep original if not specified
+
+            record.record_type = parsed.get('record_type', record.record_type)
+            record.amount = parsed.get('amount', record.amount)
+            record.category = parsed.get('category', record.category)
+            record.description = parsed.get('description', record.description)
+            record.record_date = record_date
+            db.session.commit()
+            return record, 'update'
+        # If target not found, fall through to add
+        action = 'add'
+
+    # --- ADD (default) ---
     try:
         record_date = datetime.strptime(parsed['record_date'], '%Y-%m-%d').date()
     except (ValueError, KeyError):
@@ -358,7 +481,7 @@ def _save_finance_record(user_id, parsed):
     )
     db.session.add(record)
     db.session.commit()
-    return record
+    return record, 'add'
 
 
 # ===================== System Prompt =====================
@@ -691,22 +814,46 @@ def send_message():
 
         # --- Finance Record Detection ---
         finance_saved = None
+        finance_action = None
         if intent.get('is_finance'):
-            parsed = _parse_finance_with_llm(message, api_base, api_key, model)
+            recent_ctx = _get_recent_finance_records(current_user.id)
+            parsed = _parse_finance_with_llm(message, api_base, api_key, model, recent_ctx)
             if parsed:
-                record = _save_finance_record(current_user.id, parsed)
+                record, finance_action = _save_finance_record(current_user.id, parsed)
                 finance_saved = record
                 type_label = '支出' if record.record_type == 'expense' else '收入'
-                extra_context += (
-                    f'\n\n[系统提示] 已自动识别并保存了一笔记账记录：\n'
-                    f'- 类型：{type_label}\n'
-                    f'- 金额：¥{record.amount:.2f}\n'
-                    f'- 分类：{record.category}\n'
-                    f'- 描述：{record.description}\n'
-                    f'- 日期：{record.record_date}\n'
-                    f'请在回复中确认已帮用户记录了这笔{type_label}，并简要总结。'
-                    f'可以提醒用户在「记账报表」页面查看详细统计。'
-                )
+
+                if finance_action == 'delete':
+                    extra_context += (
+                        f'\n\n[系统提示] 已根据用户要求删除了一笔记账记录：\n'
+                        f'- 类型：{type_label}\n'
+                        f'- 金额：¥{record.amount:.2f}\n'
+                        f'- 分类：{record.category}\n'
+                        f'- 描述：{record.description}\n'
+                        f'请在回复中确认已帮用户删除了这笔记录。'
+                    )
+                elif finance_action == 'update':
+                    extra_context += (
+                        f'\n\n[系统提示] 已根据用户要求修改了一笔记账记录（而非新增）：\n'
+                        f'- 类型：{type_label}\n'
+                        f'- 金额：¥{record.amount:.2f}\n'
+                        f'- 分类：{record.category}\n'
+                        f'- 描述：{record.description}\n'
+                        f'- 日期：{record.record_date}\n'
+                        f'请在回复中确认已帮用户修改了这笔记录（注意是修改而非新增），并简要总结修改内容。'
+                        f'可以提醒用户在「记账报表」页面查看。'
+                    )
+                else:
+                    extra_context += (
+                        f'\n\n[系统提示] 已自动识别并保存了一笔记账记录：\n'
+                        f'- 类型：{type_label}\n'
+                        f'- 金额：¥{record.amount:.2f}\n'
+                        f'- 分类：{record.category}\n'
+                        f'- 描述：{record.description}\n'
+                        f'- 日期：{record.record_date}\n'
+                        f'请在回复中确认已帮用户记录了这笔{type_label}，并简要总结。'
+                        f'可以提醒用户在「记账报表」页面查看详细统计。'
+                    )
 
         # --- Build LLM messages ---
         system_prompt = _build_system_prompt(conv, extra_context)
@@ -751,14 +898,19 @@ def send_message():
         }
         if finance_saved:
             type_label = '支出' if finance_saved.record_type == 'expense' else '收入'
-            result_data['finance_record'] = {
-                'id': finance_saved.id,
+            finance_data = {
                 'type': type_label,
                 'amount': finance_saved.amount,
                 'category': finance_saved.category,
                 'description': finance_saved.description,
-                'date': finance_saved.record_date.strftime('%Y-%m-%d')
+                'action': finance_action or 'add',
             }
+            if finance_action != 'delete':
+                finance_data['id'] = finance_saved.id
+                finance_data['date'] = finance_saved.record_date.strftime('%Y-%m-%d')
+            else:
+                finance_data['date'] = finance_saved.record_date.strftime('%Y-%m-%d') if hasattr(finance_saved.record_date, 'strftime') else str(finance_saved.record_date)
+            result_data['finance_record'] = finance_data
 
         return jsonify(result_data)
 

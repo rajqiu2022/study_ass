@@ -10,16 +10,36 @@
 <div class="card" style="margin-bottom:20px;padding:14px 18px;">
     <form method="GET" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
         <div style="flex:1;min-width:150px;">
-            <input type="text" name="search" class="form-input" placeholder="搜索标题、内容、标签..." value="{{ search }}" style="border:none;background:transparent;">
+            <input type="text" name="search" class="form-input" placeholder="智能搜索：描述你想找的内容..." value="{{ search }}" style="border:none;background:transparent;">
         </div>
+        <select name="category" class="form-select" style="width:auto;min-width:90px;background:var(--bg);">
+            <option value="">所有分类</option>
+            {% for v, l in categories %}<option value="{{ v }}" {{ 'selected' if current_category==v }}>{{ l }}</option>{% endfor %}
+        </select>
         <select name="folder" class="form-select" style="width:auto;min-width:110px;background:var(--bg);">
             <option value="">所有文件夹</option>
             {% for f in folders %}<option value="{{ f }}" {{ 'selected' if current_folder==f }}>{{ f }}</option>{% endfor %}
         </select>
         <button type="submit" class="btn btn-primary btn-sm"><i class="ri-search-line"></i> 搜索</button>
-        {% if search or current_folder %}<a href="{{ url_for('notes.note_list') }}" class="btn btn-ghost btn-sm"><i class="ri-close-line"></i></a>{% endif %}
+        {% if search or current_folder or current_category %}<a href="{{ url_for('notes.note_list') }}" class="btn btn-ghost btn-sm"><i class="ri-close-line"></i></a>{% endif %}
     </form>
 </div>
+
+{% if current_category or current_folder %}
+<div style="display:flex;gap:6px;margin-bottom:14px;flex-wrap:wrap;align-items:center;">
+    <span style="font-size:12px;color:var(--text-muted);">筛选：</span>
+    {% if current_category %}
+    <a href="{{ url_for('notes.note_list', folder=current_folder, search=search) }}" class="tag" style="font-size:11px;cursor:pointer;display:inline-flex;align-items:center;gap:4px;">
+        {{ dict(categories).get(current_category, current_category) }} <i class="ri-close-line" style="font-size:10px;"></i>
+    </a>
+    {% endif %}
+    {% if current_folder %}
+    <a href="{{ url_for('notes.note_list', category=current_category, search=search) }}" class="tag" style="font-size:11px;cursor:pointer;display:inline-flex;align-items:center;gap:4px;">
+        <i class="ri-folder-line"></i> {{ current_folder }} <i class="ri-close-line" style="font-size:10px;"></i>
+    </a>
+    {% endif %}
+</div>
+{% endif %}
 
 {% if notes %}
 <div class="notes-grid">

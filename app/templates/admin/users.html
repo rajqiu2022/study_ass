@@ -1,0 +1,198 @@
+{% extends "base.html" %}
+{% block title %}用户管理 - 智能知识库{% endblock %}
+{% block page_title %}用户管理{% endblock %}
+
+{% block top_actions %}
+<a href="{{ url_for('admin.admin_dashboard') }}" class="btn btn-ghost"><i class="ri-arrow-left-line"></i> 返回后台</a>
+{% endblock %}
+
+{% block content %}
+<style>
+    .user-mgmt-stats {
+        display:grid; grid-template-columns:repeat(auto-fit, minmax(140px,1fr));
+        gap:14px; margin-bottom:22px;
+    }
+    .user-mgmt-stat {
+        background:var(--card-bg); border:1px solid var(--border); border-radius:var(--radius);
+        padding:16px; text-align:center;
+    }
+    .user-mgmt-stat .val { font-size:28px; font-weight:700; color:var(--accent); }
+    .user-mgmt-stat .lbl { font-size:12px; color:var(--text-muted); margin-top:4px; }
+    .user-table { width:100%; border-collapse:collapse; font-size:13px; }
+    .user-table th {
+        text-align:left; padding:10px 12px; font-size:11px; font-weight:600;
+        text-transform:uppercase; letter-spacing:0.5px; color:var(--text-muted);
+        border-bottom:2px solid var(--border); white-space:nowrap;
+    }
+    .user-table td { padding:12px; border-bottom:1px solid var(--border); vertical-align:middle; }
+    .user-table tr:hover { background:rgba(99,102,241,0.04); }
+    .user-table .user-cell {
+        display:flex; align-items:center; gap:10px;
+    }
+    .user-table .user-cell .avatar {
+        width:34px; height:34px; border-radius:50%; display:flex; align-items:center;
+        justify-content:center; font-weight:700; font-size:13px; color:white;
+        background:var(--accent); flex-shrink:0;
+    }
+    .user-table .user-cell .info { line-height:1.4; }
+    .user-table .user-cell .name { font-weight:600; font-size:13px; }
+    .user-table .user-cell .bio { font-size:11px; color:var(--text-muted); max-width:180px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .num-cell { text-align:center; font-weight:600; }
+    .num-cell .num { font-size:16px; }
+    .num-cell .sublabel { font-size:10px; color:var(--text-muted); display:none; }
+    .login-time { font-size:12px; color:var(--text-muted); white-space:nowrap; }
+    .login-time .date { color:var(--text-secondary); font-weight:500; }
+    .action-btns { display:flex; gap:4px; }
+    .status-dot { display:inline-block; width:7px; height:7px; border-radius:50%; margin-right:5px; }
+    .status-dot.online { background:#10b981; }
+    .status-dot.offline { background:var(--text-muted); }
+    .search-bar {
+        display:flex; gap:10px; margin-bottom:18px; align-items:center;
+    }
+    .search-bar input {
+        flex:1; padding:8px 14px; border:1px solid var(--border); border-radius:var(--radius);
+        background:var(--card-bg); color:var(--text-primary); font-size:13px;
+    }
+    .search-bar input:focus { outline:none; border-color:var(--accent); }
+    @media(max-width:768px) {
+        .user-mgmt-stats { grid-template-columns:repeat(2,1fr); gap:10px; }
+        .user-table { font-size:12px; }
+        .user-table th, .user-table td { padding:8px 6px; }
+        .user-table .user-cell .avatar { width:28px; height:28px; font-size:11px; }
+        .user-table .user-cell .bio { display:none; }
+        .hide-mobile { display:none; }
+        .num-cell .sublabel { display:block; }
+    }
+</style>
+
+{% set total_users = users_data|length %}
+{% set total_notes = users_data|sum(attribute='note_count') %}
+{% set total_convs = users_data|sum(attribute='conv_count') %}
+{% set admin_count = users_data|selectattr('user.is_admin')|list|length %}
+
+<div class="user-mgmt-stats">
+    <div class="user-mgmt-stat">
+        <div class="val">{{ total_users }}</div>
+        <div class="lbl">总用户数</div>
+    </div>
+    <div class="user-mgmt-stat">
+        <div class="val">{{ admin_count }}</div>
+        <div class="lbl">管理员</div>
+    </div>
+    <div class="user-mgmt-stat">
+        <div class="val">{{ total_notes }}</div>
+        <div class="lbl">知识库文章总数</div>
+    </div>
+    <div class="user-mgmt-stat">
+        <div class="val">{{ total_convs }}</div>
+        <div class="lbl">AI对话总数</div>
+    </div>
+</div>
+
+<div class="card">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:10px;">
+        <div class="card-title" style="margin:0;"><i class="ri-team-line"></i> 用户列表</div>
+        <div class="search-bar" style="margin:0;flex:1;max-width:300px;">
+            <input type="text" id="userSearch" placeholder="搜索用户名..." oninput="filterUsers()">
+        </div>
+    </div>
+
+    <div style="overflow-x:auto;">
+        <table class="user-table" id="userTable">
+            <thead>
+                <tr>
+                    <th>用户</th>
+                    <th>角色</th>
+                    <th class="hide-mobile">场景</th>
+                    <th>知识库文章</th>
+                    <th class="hide-mobile">AI对话</th>
+                    <th class="hide-mobile">收藏</th>
+                    <th>注册时间</th>
+                    <th>最近登录</th>
+                    <th>操作</th>
+                </tr>
+            </thead>
+            <tbody>
+            {% for item in users_data %}
+            {% set u = item.user %}
+            <tr data-username="{{ u.username|lower }}">
+                <td>
+                    <div class="user-cell">
+                        <div class="avatar" style="{% if u.is_admin %}background:linear-gradient(135deg,#f59e0b,#f97316);{% endif %}">{{ u.username[0].upper() }}</div>
+                        <div class="info">
+                            <div class="name">{{ u.username }}</div>
+                            {% if u.bio %}<div class="bio">{{ u.bio }}</div>{% endif %}
+                        </div>
+                    </div>
+                </td>
+                <td>
+                    <span class="tag {{ 'tag-admin' if u.is_admin else 'tag-user' }}">
+                        {{ '管理员' if u.is_admin else '用户' }}
+                    </span>
+                </td>
+                <td class="hide-mobile" style="font-size:12px;">
+                    {{ {'work':'🏢 工作','study':'📚 学习','life':'🏠 生活','general':'🌐 通用'}.get(u.scene or 'general', '🌐 通用') }}
+                </td>
+                <td class="num-cell">
+                    <div class="num" style="color:{% if item.note_count > 0 %}var(--accent){% else %}var(--text-muted){% endif %};">
+                        {{ item.note_count }}
+                    </div>
+                    <div class="sublabel">文章</div>
+                </td>
+                <td class="num-cell hide-mobile">
+                    <div class="num" style="color:{% if item.conv_count > 0 %}#10b981{% else %}var(--text-muted){% endif %};">
+                        {{ item.conv_count }}
+                    </div>
+                </td>
+                <td class="num-cell hide-mobile">
+                    <div class="num" style="color:{% if item.coll_count > 0 %}#f59e0b{% else %}var(--text-muted){% endif %};">
+                        {{ item.coll_count }}
+                    </div>
+                </td>
+                <td class="login-time">
+                    {{ u.created_at.strftime('%Y-%m-%d') if u.created_at else '-' }}
+                </td>
+                <td class="login-time">
+                    {% if u.last_login %}
+                    <span class="date">{{ u.last_login.strftime('%m-%d %H:%M') }}</span>
+                    {% else %}
+                    <span style="color:var(--text-muted);">从未登录</span>
+                    {% endif %}
+                </td>
+                <td>
+                    <div class="action-btns">
+                        <a href="{{ url_for('admin.user_detail', user_id=u.id) }}" class="btn btn-ghost btn-sm" title="查看详情"><i class="ri-eye-line"></i></a>
+                        {% if not u.is_admin %}
+                        <form method="POST" action="{{ url_for('admin.delete_user', user_id=u.id) }}" 
+                              onsubmit="return confirm('确定删除用户 {{ u.username }} ？所有数据将被清除，不可恢复！')" style="margin:0;">
+                            <button type="submit" class="btn btn-ghost btn-sm" style="color:#ef4444;" title="删除用户"><i class="ri-delete-bin-line"></i></button>
+                        </form>
+                        {% endif %}
+                    </div>
+                </td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    {% if not users_data %}
+    <div style="text-align:center;padding:40px;color:var(--text-muted);">
+        <i class="ri-user-3-line" style="font-size:36px;display:block;margin-bottom:8px;"></i>
+        暂无用户
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function filterUsers() {
+    const q = document.getElementById('userSearch').value.toLowerCase();
+    document.querySelectorAll('#userTable tbody tr').forEach(tr => {
+        const name = tr.getAttribute('data-username') || '';
+        tr.style.display = name.includes(q) ? '' : 'none';
+    });
+}
+</script>
+{% endblock %}

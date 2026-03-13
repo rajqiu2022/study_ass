@@ -54,11 +54,33 @@
         </div>
     </div>
     <div>
+        <div class="card" style="margin-bottom:20px;">
+            <div class="card-title"><i class="ri-robot-line"></i> 机器人 API 配置</div>
+            <p style="font-size:12px;color:var(--text-secondary);margin-bottom:14px;">为 QQ 机器人等外部服务提供 API 接口。生成 Token 后配置到机器人即可。</p>
+            <div style="margin-bottom:12px;">
+                <label class="form-label">当前 API Token</label>
+                <div style="display:flex;gap:8px;align-items:center;">
+                    <input type="password" class="form-input" id="botToken" value="{{ bot_api_token }}" readonly style="flex:1;font-family:monospace;font-size:12px;">
+                    <button class="btn btn-ghost btn-sm" onclick="let t=document.getElementById('botToken');t.type=t.type==='password'?'text':'password';" title="显示/隐藏"><i class="ri-eye-line"></i></button>
+                </div>
+                {% if not bot_api_token %}
+                <p style="font-size:11px;color:var(--warning);margin-top:4px;">⚠️ 尚未生成 Token，机器人 API 不可用</p>
+                {% endif %}
+            </div>
+            <div style="display:flex;gap:8px;align-items:center;">
+                <button class="btn btn-primary btn-sm" onclick="genBotToken()"><i class="ri-key-line"></i> 生成新 Token</button>
+                <span style="font-size:11px;color:var(--text-muted);">API 地址: <code>/bot-api/chat</code></span>
+            </div>
+        </div>
+
         <div class="card">
-            <div class="card-title"><i class="ri-team-line"></i> 用户管理</div>
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+                <div class="card-title" style="margin:0;"><i class="ri-team-line"></i> 用户概览</div>
+                <a href="{{ url_for('admin.user_management') }}" class="btn btn-primary btn-sm"><i class="ri-user-settings-line"></i> 用户管理</a>
+            </div>
             <div style="overflow-x:auto;">
                 <table>
-                    <thead><tr><th>用户</th><th>角色</th><th>场景</th><th>最近登录</th><th>操作</th></tr></thead>
+                    <thead><tr><th>用户</th><th>角色</th><th>文章数</th><th>最近登录</th><th>操作</th></tr></thead>
                     <tbody>
                     {% for u in users %}
                     <tr>
@@ -69,12 +91,10 @@
                             </div>
                         </td>
                         <td><span class="tag {{ 'tag-admin' if u.is_admin else 'tag-user' }}">{{ '管理员' if u.is_admin else '用户' }}</span></td>
-                        <td style="font-size:12px;">{{ {'work':'工作','study':'学习','life':'生活','general':'通用'}.get(u.scene or 'general', '通用') }}</td>
+                        <td style="font-size:13px;text-align:center;font-weight:600;color:var(--accent);">{{ u.notes.count() }}</td>
                         <td style="font-size:12px;color:var(--text-muted);">{{ u.last_login.strftime('%m-%d %H:%M') if u.last_login else '从未' }}</td>
                         <td>
-                            {% if not u.is_admin %}
                             <a href="{{ url_for('admin.user_detail', user_id=u.id) }}" class="btn btn-ghost btn-sm"><i class="ri-eye-line"></i></a>
-                            {% else %}<span style="font-size:11px;color:var(--text-muted);">-</span>{% endif %}
                         </td>
                     </tr>
                     {% endfor %}
@@ -91,5 +111,23 @@
 const hints = {openai:'推荐: gpt-4o, gpt-4o-mini',deepseek:'推荐: deepseek-chat, deepseek-reasoner',zhipu:'推荐: glm-4, glm-4-flash',moonshot:'推荐: moonshot-v1-8k',qwen:'推荐: qwen-turbo, qwen-plus, qwen-max',other:'请输入模型名称'};
 function updateHint(){document.getElementById('hint').textContent=hints[document.getElementById('llmP').value]||'';}
 updateHint();
+
+async function genBotToken() {
+    if (!confirm('生成新 Token 后，旧 Token 将立即失效。确定继续？')) return;
+    try {
+        const res = await fetch('/bot-api/admin/generate-token', {method:'POST',headers:{'Content-Type':'application/json'}});
+        const data = await res.json();
+        if (data.token) {
+            const inp = document.getElementById('botToken');
+            inp.value = data.token;
+            inp.type = 'text';
+            alert('新 Token 已生成！请复制并配置到机器人。');
+        } else {
+            alert(data.error || '生成失败');
+        }
+    } catch(e) {
+        alert('请求失败: ' + e.message);
+    }
+}
 </script>
 {% endblock %}

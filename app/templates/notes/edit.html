@@ -28,8 +28,8 @@
             <div class="form-group" style="margin:0;">
                 <label class="form-label">分类</label>
                 <select name="category" class="form-select">
-                    {% set cats = [('general','通用'),('work','工作'),('study','学习'),('life','生活'),('tech','技术'),('finance','理财'),('health','健康')] %}
-                    {% for v, l in cats %}<option value="{{ v }}" {{ 'selected' if note and note.category==v }}>{{ l }}</option>{% endfor %}
+                    <option value="auto" {{ 'selected' if not note }}>🤖 AI 自动分类</option>
+                    {% for v, l in categories %}<option value="{{ v }}" {{ 'selected' if note and note.category==v }}>{{ l }}</option>{% endfor %}
                 </select>
             </div>
         </div>

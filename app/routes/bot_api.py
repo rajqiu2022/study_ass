@@ -346,21 +346,196 @@ def bot_conversation_history(bot_user, conv_id):
     })
 
 
-# ===================== Save Note =====================
+# ===================== Notes CRUD =====================
 
-@bot_api_bp.route('/save-note', methods=['POST'])
+@bot_api_bp.route('/notes', methods=['GET'])
 @_bot_auth_required
-def bot_save_note(bot_user):
-    """Save content as a note.
+def bot_list_notes(bot_user):
+    """List user's notes with optional filtering and search.
+
+    Query params:
+      - category: filter by category (work/study/life/general)
+      - tag: filter by tag (substring match)
+      - q: search keyword in title and content
+      - page: page number (default 1)
+      - per_page: items per page (default 20, max 50)
+    """
+    category = request.args.get('category', '').strip()
+    tag = request.args.get('tag', '').strip()
+    keyword = request.args.get('q', '').strip()
+    page = request.args.get('page', 1, type=int)
+    per_page = min(request.args.get('per_page', 20, type=int), 50)
+
+    query = Note.query.filter_by(user_id=bot_user.id)
+
+    if category:
+        query = query.filter_by(category=category)
+    if tag:
+        query = query.filter(Note.tags.ilike(f'%{tag}%'))
+    if keyword:
+        query = query.filter(
+            db.or_(
+                Note.title.ilike(f'%{keyword}%'),
+                Note.content.ilike(f'%{keyword}%')
+            )
+        )
+
+    query = query.order_by(Note.updated_at.desc())
+    pagination = query.paginate(page=page, per_page=per_page, error_out=False)
+
+    return jsonify({
+        'notes': [{
+            'id': n.id,
+            'title': n.title,
+            'category': n.category,
+            'tags': n.tags,
+            'folder': n.folder,
+            'source_type': n.source_type,
+            'created_at': n.created_at.strftime('%Y-%m-%d %H:%M'),
+            'updated_at': n.updated_at.strftime('%Y-%m-%d %H:%M'),
+            'content_preview': n.content[:200] + ('...' if len(n.content) > 200 else '')
+        } for n in pagination.items],
+        'total': pagination.total,
+        'page': pagination.page,
+        'pages': pagination.pages,
+    })
+
+
+@bot_api_bp.route('/notes/<int:note_id>', methods=['GET'])
+@_bot_auth_required
+def bot_get_note(bot_user, note_id):
+    """Get full content of a single note."""
+    note = Note.query.filter_by(id=note_id, user_id=bot_user.id).first()
+    if not note:
+        return jsonify({'error': '笔记不存在', 'code': 404}), 404
+
+    return jsonify({
+        'id': note.id,
+        'title': note.title,
+        'content': note.content,
+        'category': note.category,
+        'tags': note.tags,
+        'folder': note.folder,
+        'source_type': note.source_type,
+        'source_url': note.source_url or '',
+        'created_at': note.created_at.strftime('%Y-%m-%d %H:%M'),
+        'updated_at': note.updated_at.strftime('%Y-%m-%d %H:%M'),
+    })
+
+
+@bot_api_bp.route('/notes', methods=['POST'])
+@_bot_auth_required
+def bot_create_note(bot_user):
+    """Create a new note.
 
     Request JSON:
     {
         "title": "笔记标题",
         "content": "笔记内容 (Markdown)",
-        "category": "general",
-        "tags": "tag1,tag2"
+        "category": "general",      // optional: work/study/life/general
+        "tags": "tag1,tag2",         // optional
+        "folder": "/"               // optional
     }
     """
+    data = request.get_json() or {}
+    content = data.get('content', '').strip()
+    title = data.get('title', '').strip()
+    category = data.get('category', 'general')
+    tags = data.get('tags', '')
+    folder = data.get('folder', '/')
+
+    if not content:
+        return jsonify({'error': '内容不能为空', 'code': 400}), 400
+    if not title:
+        first_line = content.split('\n')[0]
+        title = re.sub(r'[#*\-\[\]()]', '', first_line).strip()[:50] or '机器人笔记'
+
+    note = Note(
+        user_id=bot_user.id,
+        title=title,
+        content=content,
+        category=category,
+        tags=tags,
+        source_type='bot',
+        folder=folder
+    )
+    db.session.add(note)
+    db.session.commit()
+
+    return jsonify({
+        'ok': True,
+        'note_id': note.id,
+        'title': note.title,
+        'message': f'已保存笔记：{note.title}'
+    })
+
+
+@bot_api_bp.route('/notes/<int:note_id>', methods=['PUT'])
+@_bot_auth_required
+def bot_update_note(bot_user, note_id):
+    """Update an existing note.
+
+    Request JSON (all fields optional, only provided fields will be updated):
+    {
+        "title": "新标题",
+        "content": "新内容",
+        "category": "study",
+        "tags": "new_tag1,new_tag2",
+        "folder": "/学习"
+    }
+    """
+    note = Note.query.filter_by(id=note_id, user_id=bot_user.id).first()
+    if not note:
+        return jsonify({'error': '笔记不存在', 'code': 404}), 404
+
+    data = request.get_json() or {}
+
+    if 'title' in data:
+        note.title = data['title'].strip()[:200]
+    if 'content' in data:
+        note.content = data['content']
+    if 'category' in data:
+        note.category = data['category']
+    if 'tags' in data:
+        note.tags = data['tags']
+    if 'folder' in data:
+        note.folder = data['folder']
+
+    note.updated_at = datetime.utcnow()
+    db.session.commit()
+
+    return jsonify({
+        'ok': True,
+        'note_id': note.id,
+        'title': note.title,
+        'message': f'已更新笔记：{note.title}'
+    })
+
+
+@bot_api_bp.route('/notes/<int:note_id>', methods=['DELETE'])
+@_bot_auth_required
+def bot_delete_note(bot_user, note_id):
+    """Delete a note."""
+    note = Note.query.filter_by(id=note_id, user_id=bot_user.id).first()
+    if not note:
+        return jsonify({'error': '笔记不存在', 'code': 404}), 404
+
+    title = note.title
+    db.session.delete(note)
+    db.session.commit()
+
+    return jsonify({
+        'ok': True,
+        'message': f'已删除笔记：{title}'
+    })
+
+
+# ===================== Legacy: Save Note (兼容旧接口) =====================
+
+@bot_api_bp.route('/save-note', methods=['POST'])
+@_bot_auth_required
+def bot_save_note(bot_user):
+    """Save content as a note (legacy endpoint, redirects to /notes POST)."""
     data = request.get_json() or {}
     content = data.get('content', '').strip()
     title = data.get('title', '').strip()
@@ -390,6 +565,260 @@ def bot_save_note(bot_user):
         'note_id': note.id,
         'title': note.title,
         'message': f'已保存笔记：{note.title}'
+    })
+
+
+# ===================== Finance CRUD =====================
+
+@bot_api_bp.route('/finance', methods=['GET'])
+@_bot_auth_required
+def bot_list_finance(bot_user):
+    """List user's finance records with optional filtering.
+
+    Query params:
+      - type: filter by record_type (expense/income)
+      - category: filter by category
+      - start_date: start date (YYYY-MM-DD)
+      - end_date: end date (YYYY-MM-DD)
+      - q: search keyword in description
+      - page: page number (default 1)
+      - per_page: items per page (default 20, max 50)
+    """
+    from datetime import date, timedelta
+
+    record_type = request.args.get('type', '').strip()
+    category = request.args.get('category', '').strip()
+    start_date = request.args.get('start_date', '').strip()
+    end_date = request.args.get('end_date', '').strip()
+    keyword = request.args.get('q', '').strip()
+    page = request.args.get('page', 1, type=int)
+    per_page = min(request.args.get('per_page', 20, type=int), 50)
+
+    query = FinanceRecord.query.filter_by(user_id=bot_user.id)
+
+    if record_type in ('expense', 'income'):
+        query = query.filter_by(record_type=record_type)
+    if category:
+        query = query.filter_by(category=category)
+    if keyword:
+        query = query.filter(FinanceRecord.description.ilike(f'%{keyword}%'))
+
+    # Date range
+    if start_date:
+        try:
+            sd = datetime.strptime(start_date, '%Y-%m-%d').date()
+            query = query.filter(FinanceRecord.record_date >= sd)
+        except ValueError:
+            pass
+    if end_date:
+        try:
+            ed = datetime.strptime(end_date, '%Y-%m-%d').date()
+            query = query.filter(FinanceRecord.record_date <= ed)
+        except ValueError:
+            pass
+
+    query = query.order_by(FinanceRecord.record_date.desc(), FinanceRecord.created_at.desc())
+    pagination = query.paginate(page=page, per_page=per_page, error_out=False)
+
+    # Summary stats for current filter
+    from sqlalchemy import func
+    stats_query = FinanceRecord.query.filter_by(user_id=bot_user.id)
+    if record_type in ('expense', 'income'):
+        stats_query = stats_query.filter_by(record_type=record_type)
+    if category:
+        stats_query = stats_query.filter_by(category=category)
+    if start_date:
+        try:
+            sd = datetime.strptime(start_date, '%Y-%m-%d').date()
+            stats_query = stats_query.filter(FinanceRecord.record_date >= sd)
+        except ValueError:
+            pass
+    if end_date:
+        try:
+            ed = datetime.strptime(end_date, '%Y-%m-%d').date()
+            stats_query = stats_query.filter(FinanceRecord.record_date <= ed)
+        except ValueError:
+            pass
+
+    total_expense = stats_query.filter_by(record_type='expense') \
+        .with_entities(func.coalesce(func.sum(FinanceRecord.amount), 0)).scalar()
+    total_income = stats_query.filter_by(record_type='income') \
+        .with_entities(func.coalesce(func.sum(FinanceRecord.amount), 0)).scalar()
+
+    return jsonify({
+        'records': [{
+            'id': r.id,
+            'type': '支出' if r.record_type == 'expense' else '收入',
+            'record_type': r.record_type,
+            'amount': r.amount,
+            'category': r.category,
+            'description': r.description,
+            'date': r.record_date.strftime('%Y-%m-%d'),
+            'source': r.source,
+            'created_at': r.created_at.strftime('%Y-%m-%d %H:%M'),
+        } for r in pagination.items],
+        'total': pagination.total,
+        'page': pagination.page,
+        'pages': pagination.pages,
+        'summary': {
+            'total_expense': round(float(total_expense), 2),
+            'total_income': round(float(total_income), 2),
+            'balance': round(float(total_income) - float(total_expense), 2),
+        }
+    })
+
+
+@bot_api_bp.route('/finance/<int:record_id>', methods=['GET'])
+@_bot_auth_required
+def bot_get_finance(bot_user, record_id):
+    """Get a single finance record."""
+    record = FinanceRecord.query.filter_by(id=record_id, user_id=bot_user.id).first()
+    if not record:
+        return jsonify({'error': '记账记录不存在', 'code': 404}), 404
+
+    return jsonify({
+        'id': record.id,
+        'type': '支出' if record.record_type == 'expense' else '收入',
+        'record_type': record.record_type,
+        'amount': record.amount,
+        'category': record.category,
+        'description': record.description,
+        'date': record.record_date.strftime('%Y-%m-%d'),
+        'source': record.source,
+        'created_at': record.created_at.strftime('%Y-%m-%d %H:%M'),
+    })
+
+
+@bot_api_bp.route('/finance', methods=['POST'])
+@_bot_auth_required
+def bot_create_finance(bot_user):
+    """Create a new finance record.
+
+    Request JSON:
+    {
+        "record_type": "expense",      // "expense" or "income"
+        "amount": 88.0,
+        "category": "购物",
+        "description": "买了一本书",
+        "date": "2026-03-17"           // optional, default today
+    }
+    """
+    from datetime import date as date_type
+
+    data = request.get_json() or {}
+    record_type = data.get('record_type', 'expense')
+    amount = data.get('amount')
+    category = data.get('category', '')
+    description = data.get('description', '')
+    record_date_str = data.get('date', '')
+
+    if record_type not in ('expense', 'income'):
+        return jsonify({'error': 'record_type 必须是 expense 或 income', 'code': 400}), 400
+    if not amount or float(amount) <= 0:
+        return jsonify({'error': '金额必须大于 0', 'code': 400}), 400
+    if not category:
+        return jsonify({'error': '分类不能为空', 'code': 400}), 400
+
+    # Parse date
+    if record_date_str:
+        try:
+            record_date = datetime.strptime(record_date_str, '%Y-%m-%d').date()
+        except ValueError:
+            return jsonify({'error': '日期格式应为 YYYY-MM-DD', 'code': 400}), 400
+    else:
+        record_date = date_type.today()
+
+    record = FinanceRecord(
+        user_id=bot_user.id,
+        record_type=record_type,
+        amount=float(amount),
+        category=category,
+        description=description,
+        record_date=record_date,
+        source='bot'
+    )
+    db.session.add(record)
+    db.session.commit()
+
+    type_label = '支出' if record_type == 'expense' else '收入'
+    return jsonify({
+        'ok': True,
+        'record_id': record.id,
+        'message': f'已记录{type_label}：¥{record.amount} ({category})'
+    })
+
+
+@bot_api_bp.route('/finance/<int:record_id>', methods=['PUT'])
+@_bot_auth_required
+def bot_update_finance(bot_user, record_id):
+    """Update an existing finance record.
+
+    Request JSON (all fields optional):
+    {
+        "record_type": "expense",
+        "amount": 99.0,
+        "category": "教育",
+        "description": "买了两本书",
+        "date": "2026-03-17"
+    }
+    """
+    record = FinanceRecord.query.filter_by(id=record_id, user_id=bot_user.id).first()
+    if not record:
+        return jsonify({'error': '记账记录不存在', 'code': 404}), 404
+
+    data = request.get_json() or {}
+
+    if 'record_type' in data and data['record_type'] in ('expense', 'income'):
+        record.record_type = data['record_type']
+    if 'amount' in data and float(data['amount']) > 0:
+        record.amount = float(data['amount'])
+    if 'category' in data and data['category']:
+        record.category = data['category']
+    if 'description' in data:
+        record.description = data['description']
+    if 'date' in data:
+        try:
+            record.record_date = datetime.strptime(data['date'], '%Y-%m-%d').date()
+        except ValueError:
+            return jsonify({'error': '日期格式应为 YYYY-MM-DD', 'code': 400}), 400
+
+    db.session.commit()
+
+    type_label = '支出' if record.record_type == 'expense' else '收入'
+    return jsonify({
+        'ok': True,
+        'record_id': record.id,
+        'message': f'已修改{type_label}：¥{record.amount} ({record.category})'
+    })
+
+
+@bot_api_bp.route('/finance/<int:record_id>', methods=['DELETE'])
+@_bot_auth_required
+def bot_delete_finance(bot_user, record_id):
+    """Delete a finance record."""
+    record = FinanceRecord.query.filter_by(id=record_id, user_id=bot_user.id).first()
+    if not record:
+        return jsonify({'error': '记账记录不存在', 'code': 404}), 404
+
+    type_label = '支出' if record.record_type == 'expense' else '收入'
+    amount = record.amount
+    category = record.category
+    db.session.delete(record)
+    db.session.commit()
+
+    return jsonify({
+        'ok': True,
+        'message': f'已删除{type_label}：¥{amount} ({category})'
+    })
+
+
+@bot_api_bp.route('/finance/categories', methods=['GET'])
+@_bot_auth_required
+def bot_finance_categories(bot_user):
+    """Get available finance categories."""
+    return jsonify({
+        'expense_categories': FinanceRecord.EXPENSE_CATEGORIES,
+        'income_categories': FinanceRecord.INCOME_CATEGORIES,
     })
 
 

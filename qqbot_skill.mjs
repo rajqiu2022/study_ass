@@ -36,6 +36,7 @@ const BOT_API_TOKEN = '';  // 从管理后台生成，填在这里
 // 每个用户维护一个 conversation_id
 const userConversations = new Map();  // qq_user_id -> conversation_id
 const lastAIResponse = new Map();    // qq_user_id -> last AI response text
+const userBindings = new Map();      // qq_user_id -> website_username (账号绑定)
 
 // ===================== HTTP 工具 =====================
 
@@ -79,19 +80,25 @@ function httpRequest(url, options = {}) {
 
 // ===================== Bot API 调用 =====================
 
-async function callBotAPI(endpoint, data = {}, method = 'POST') {
+async function callBotAPI(endpoint, data = {}, method = 'POST', botUser = '') {
     if (!BOT_API_TOKEN) {
         return { error: '未配置 BOT_API_TOKEN，请先在管理后台生成 Token' };
     }
 
     const url = `${BOT_API_BASE}/bot-api${endpoint}`;
+    const headers = {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${BOT_API_TOKEN}`,
+    };
+    // Set X-Bot-User header for correct data ownership
+    if (botUser) {
+        headers['X-Bot-User'] = botUser;
+    }
+
     try {
         const res = await httpRequest(url, {
             method,
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${BOT_API_TOKEN}`,
-            },
+            headers,
             body: method !== 'GET' ? JSON.stringify(data) : undefined,
         });
         return res.data;
@@ -106,9 +113,11 @@ async function callBotAPI(endpoint, data = {}, method = 'POST') {
  */
 async function chatWithAI(qqUserId, message, options = {}) {
     const convId = userConversations.get(qqUserId);
+    // Use bound website username if available, otherwise fall back to qqUserId
+    const effectiveUser = userBindings.get(qqUserId) || qqUserId;
     const payload = {
         message,
-        user_id: qqUserId,
+        user_id: effectiveUser,
         user_name: options.userName || '',
         enable_search: options.enableSearch || false,
     };
@@ -116,7 +125,7 @@ async function chatWithAI(qqUserId, message, options = {}) {
         payload.conversation_id = convId;
     }
 
-    const result = await callBotAPI('/chat', payload);
+    const result = await callBotAPI('/chat', payload, 'POST', effectiveUser);
 
     if (result.conversation_id) {
         userConversations.set(qqUserId, result.conversation_id);
@@ -133,7 +142,8 @@ async function chatWithAI(qqUserId, message, options = {}) {
  */
 async function newConversation(qqUserId) {
     userConversations.delete(qqUserId);
-    const result = await callBotAPI('/conversations/new', { user_id: qqUserId });
+    const effectiveUser = userBindings.get(qqUserId) || qqUserId;
+    const result = await callBotAPI('/conversations/new', { user_id: effectiveUser }, 'POST', effectiveUser);
     if (result.id) {
         userConversations.set(qqUserId, result.id);
     }
@@ -144,18 +154,52 @@ async function newConversation(qqUserId) {
  * 保存笔记
  */
 async function saveNote(qqUserId, content, title = '') {
+    const effectiveUser = userBindings.get(qqUserId) || qqUserId;
     return await callBotAPI('/save-note', {
-        user_id: qqUserId,
+        user_id: effectiveUser,
         content,
         title,
-    });
+    }, 'POST', effectiveUser);
 }
 
 /**
  * 获取对话列表
  */
 async function getConversations(qqUserId) {
-    return await callBotAPI('/conversations', { user_id: qqUserId }, 'GET');
+    const effectiveUser = userBindings.get(qqUserId) || qqUserId;
+    return await callBotAPI('/conversations', { user_id: effectiveUser }, 'GET', effectiveUser);
+}
+
+/**
+ * 绑定账号：验证网站用户是否存在
+ */
+async function bindAccount(qqUserId, websiteUsername) {
+    // Call user-check API to verify the username exists
+    const url = `${BOT_API_BASE}/bot-api/user/check?username=${encodeURIComponent(websiteUsername)}`;
+    try {
+        const res = await httpRequest(url, {
+            headers: {
+                'Authorization': `Bearer ${BOT_API_TOKEN}`,
+            },
+        });
+        const data = res.data;
+        if (data.exists) {
+            // Bind: store the mapping
+            userBindings.set(qqUserId, data.bot_user_id || data.username);
+            // Clear old conversation so next chat uses the new user context
+            userConversations.delete(qqUserId);
+            return {
+                ok: true,
+                username: data.username,
+                noteCount: data.note_count || 0,
+                conversationCount: data.conversation_count || 0,
+            };
+        } else {
+            return { ok: false, message: data.message || `用户 "${websiteUsername}" 不存在` };
+        }
+    } catch (e) {
+        return { ok: false, message: `验证失败: ${e.message}` };
+    }
 }
 
 // ===================== 消息处理 =====================
@@ -191,11 +235,56 @@ async function handleMessage(qqUserId, messageText, userName = '') {
         return `📝 已保存笔记：${result.title}`;
     }
 
+    // 账号绑定
+    if (text.startsWith('/绑定 ') || text.startsWith('/bind ')) {
+        const username = text.replace(/^\/(绑定|bind)\s+/, '').trim();
+        if (!username) return '❌ 请提供用户名。用法: /绑定 你的用户名';
+        const result = await bindAccount(qqUserId, username);
+        if (result.ok) {
+            return [
+                `✅ 账号绑定成功！`,
+                `   用户名: ${result.username}`,
+                `   笔记数: ${result.noteCount}`,
+                `   对话数: ${result.conversationCount}`,
+                ``,
+                `现在你的记账、笔记等数据都会记录到该账号下。`,
+            ].join('\n');
+        } else {
+            return `❌ 绑定失败: ${result.message}\n请先访问 http://106.55.226.176 注册账号。`;
+        }
+    }
+
+    if (text === '/解绑' || text === '/unbind') {
+        if (userBindings.has(qqUserId)) {
+            const oldUser = userBindings.get(qqUserId);
+            userBindings.delete(qqUserId);
+            userConversations.delete(qqUserId);
+            return `✅ 已解绑账号 "${oldUser}"。后续操作将使用匿名身份。`;
+        } else {
+            return '❌ 你还没有绑定任何账号。使用 /绑定 你的用户名 来绑定。';
+        }
+    }
+
+    if (text === '/我是谁' || text === '/whoami') {
+        const bound = userBindings.get(qqUserId);
+        if (bound) {
+            return `🔗 你已绑定账号: ${bound}\n记账和笔记数据会记录到该账号下。`;
+        } else {
+            return '⚠️ 你还没有绑定账号。使用 /绑定 你的用户名 来绑定。\n未绑定时，数据记录在临时账号中，无法在网站上查看。';
+        }
+    }
+
     if (text === '/帮助' || text === '/help') {
         return [
             '🤖 AI 助手指令：',
             '',
-            '💬 直接发消息 → 和 AI 对话',
+            '🔗 账号管理：',
+            '/绑定 用户名 → 绑定网站账号（记账/笔记归属该账号）',
+            '/解绑 → 解除账号绑定',
+            '/我是谁 → 查看当前绑定状态',
+            '',
+            '💬 对话：',
+            '直接发消息 → 和 AI 对话',
             '/新对话 → 开始新对话（清除上下文）',
             '/搜索 内容 → 强制联网搜索',
             '/记笔记 → 将上条 AI 回复保存为笔记',
@@ -206,6 +295,9 @@ async function handleMessage(qqUserId, messageText, userName = '') {
             '• 发送链接 → 自动抓取分析',
             '• 说"帮我搜xxx" → 自动联网搜索',
             '• 说"花了30块吃饭" → 自动记账',
+            '',
+            '⚠️ 建议先用 /绑定 绑定你的网站账号，',
+            '这样记账和笔记才能在网站上查看和管理。',
         ].join('\n');
     }
 

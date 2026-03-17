@@ -79,6 +79,9 @@ AI: (查询账单并展示汇总)
 ### 命令行使用（agent.py）
 
 ```bash
+# ---- 用户查询 ----
+python agent.py user-check 张三              # 查询用户是否存在
+
 # ---- 对话 ----
 python agent.py chat "你好"
 python agent.py chat --search "最新AI新闻"
@@ -110,6 +113,7 @@ python agent.py finance-cat                           # 查看分类
 | 接口 | 方法 | 功能 |
 |------|------|------|
 | `/bot-api/ping` | GET | 健康检查（无需认证） |
+| `/bot-api/user/check?username=xxx` | GET | 查询用户是否存在（需 Token，不需 X-Bot-User） |
 | `/bot-api/chat` | POST | AI 对话（含搜索/记账/URL分析） |
 | **对话管理** | | |
 | `/bot-api/conversations` | GET | 对话列表 |

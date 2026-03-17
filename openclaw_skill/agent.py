@@ -124,6 +124,44 @@ def cmd_ping():
         sys.exit(1)
 
 
+def cmd_user_check(username):
+    """查询用户是否存在"""
+    if not API_TOKEN or API_TOKEN == '在这里填入你的 Bot API Token':
+        print(f'❌ 错误: 未配置 API Token')
+        print(f'请编辑配置文件 {_CONFIG_FILE}')
+        sys.exit(1)
+
+    encoded_name = urllib.parse.quote(username)
+    url = f'{API_BASE}/bot-api/user/check?username={encoded_name}'
+    headers = {
+        'Authorization': f'Bearer {API_TOKEN}',
+    }
+    req = urllib.request.Request(url, headers=headers, method='GET')
+
+    try:
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            result = json.loads(resp.read().decode('utf-8'))
+
+            if result.get('exists'):
+                print(f'✅ 用户存在: {result["username"]}')
+                print(f'   角色: {result.get("role", "")}')
+                print(f'   场景: {result.get("scene", "")}')
+                print(f'   注册时间: {result.get("created_at", "")}')
+                print(f'   笔记数: {result.get("note_count", 0)}')
+                print(f'   对话数: {result.get("conversation_count", 0)}')
+            else:
+                print(f'❌ 用户 "{username}" 不存在')
+                print(f'   请先访问 {result.get("register_url", "http://106.55.226.176")} 注册账号')
+
+    except urllib.error.HTTPError as e:
+        error_body = e.read().decode('utf-8', errors='replace')
+        print(f'❌ API 错误 ({e.code}): {error_body}')
+        sys.exit(1)
+    except Exception as e:
+        print(f'❌ 请求失败: {e}')
+        sys.exit(1)
+
+
 def cmd_chat(message, enable_search=False):
     """发送消息给 AI 助手"""
     state = _load_state()
@@ -421,6 +459,7 @@ def cmd_help():
   finance-cat                 查看分类列表
 
 其他:
+  user-check <username>       查询用户是否存在
   ping                        检查服务状态
   help                        显示此帮助
 
@@ -460,6 +499,11 @@ def main():
 
     if command == 'ping':
         cmd_ping()
+    elif command == 'user-check':
+        if len(sys.argv) < 3:
+            print('❌ 用法: python agent.py user-check <username>')
+            sys.exit(1)
+        cmd_user_check(sys.argv[2])
     elif command == 'chat':
         if len(sys.argv) < 3:
             print('❌ 用法: python agent.py chat <message>')

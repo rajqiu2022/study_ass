@@ -50,7 +50,40 @@ GET /bot-api/ping
 
 ---
 
-### 2. AI 对话（核心）
+### 2. 用户查询（⚠️ 必须优先调用）
+```
+GET /bot-api/user/check?username=张三
+```
+需要 `Authorization: Bearer <TOKEN>`，**不需要** `X-Bot-User` header。
+
+**响应 — 用户存在：**
+```json
+{
+    "exists": true,
+    "username": "bot_张三",
+    "role": "user",
+    "scene": "general",
+    "created_at": "2026-03-10 08:00",
+    "note_count": 15,
+    "conversation_count": 5
+}
+```
+
+**响应 — 用户不存在：**
+```json
+{
+    "exists": false,
+    "username": "张三",
+    "register_url": "http://106.55.226.176",
+    "message": "用户 \"张三\" 不存在，请先注册账号"
+}
+```
+
+> ⚠️ **重要**：在使用知识库、记账等任何需要用户身份的功能之前，**必须先调用此接口确认用户账号存在**。如果不存在，告知对方先去 http://106.55.226.176 注册。
+
+---
+
+### 3. AI 对话（核心）
 ```
 POST /bot-api/chat
 ```
@@ -87,7 +120,7 @@ POST /bot-api/chat
 
 ---
 
-### 3. 对话管理
+### 4. 对话管理
 
 | 接口 | 方法 | 说明 |
 |------|------|------|
@@ -97,9 +130,9 @@ POST /bot-api/chat
 
 ---
 
-### 4. 知识库（笔记）管理 — 完整 CRUD
+### 5. 知识库（笔记）管理 — 完整 CRUD
 
-#### 4.1 查询笔记列表
+#### 5.1 查询笔记列表
 ```
 GET /bot-api/notes?category=study&tag=python&q=装饰器&page=1&per_page=20
 ```
@@ -131,13 +164,13 @@ GET /bot-api/notes?category=study&tag=python&q=装饰器&page=1&per_page=20
 }
 ```
 
-#### 4.2 查看笔记详情
+#### 5.2 查看笔记详情
 ```
 GET /bot-api/notes/<id>
 ```
 返回完整的笔记内容。
 
-#### 4.3 创建笔记
+#### 5.3 创建笔记
 ```
 POST /bot-api/notes
 ```
@@ -153,7 +186,7 @@ POST /bot-api/notes
 - `title` 可选，不传会自动从内容第一行提取
 - `category` 可选，默认 `general`
 
-#### 4.4 修改笔记
+#### 5.4 修改笔记
 ```
 PUT /bot-api/notes/<id>
 ```
@@ -167,7 +200,7 @@ PUT /bot-api/notes/<id>
 ```
 只传需要修改的字段即可，不传的字段保持不变。
 
-#### 4.5 删除笔记
+#### 5.5 删除笔记
 ```
 DELETE /bot-api/notes/<id>
 ```
@@ -176,9 +209,9 @@ DELETE /bot-api/notes/<id>
 
 ---
 
-### 5. 记账管理 — 完整 CRUD
+### 6. 记账管理 — 完整 CRUD
 
-#### 5.1 查询记账列表
+#### 6.1 查询记账列表
 ```
 GET /bot-api/finance?type=expense&category=餐饮&start_date=2026-03-01&end_date=2026-03-31&q=午饭&page=1
 ```
@@ -217,12 +250,12 @@ GET /bot-api/finance?type=expense&category=餐饮&start_date=2026-03-01&end_date
 ```
 > `summary` 是当前筛选条件下的汇总统计。
 
-#### 5.2 查看单条记账
+#### 6.2 查看单条记账
 ```
 GET /bot-api/finance/<id>
 ```
 
-#### 5.3 新增记账
+#### 6.3 新增记账
 ```
 POST /bot-api/finance
 ```
@@ -241,7 +274,7 @@ POST /bot-api/finance
 - `description` 可选
 - `date` 可选，默认当天
 
-#### 5.4 修改记账
+#### 6.4 修改记账
 ```
 PUT /bot-api/finance/<id>
 ```
@@ -254,12 +287,12 @@ PUT /bot-api/finance/<id>
 ```
 只传需要修改的字段。
 
-#### 5.5 删除记账
+#### 6.5 删除记账
 ```
 DELETE /bot-api/finance/<id>
 ```
 
-#### 5.6 获取分类列表
+#### 6.6 获取分类列表
 ```
 GET /bot-api/finance/categories
 ```
@@ -276,6 +309,19 @@ GET /bot-api/finance/categories
 ## 使用规则
 
 当用户发送消息时，请按以下规则处理：
+
+### ⚠️ 用户身份确认（最高优先级）
+
+在执行任何**知识库操作**（笔记增删改查）或**记账操作**（记账增删改查）之前，**必须先确认用户账号**：
+
+1. **询问用户名**：如果还不知道对方的账号名，先问："请问你的账号用户名是什么？"
+2. **调用查询接口**：`GET /bot-api/user/check?username=用户名`
+3. **判断结果**：
+   - 如果 `exists: true` → 记住该用户名，用它作为 `X-Bot-User` 或 `user_id` 发起后续请求
+   - 如果 `exists: false` → 告知对方："你的账号还未注册，请先访问 http://106.55.226.176 注册一个账号，然后再来找我。"**不要继续执行操作**
+4. **记住身份**：同一次会话中，确认过一次就够了，后续操作不需要重复询问
+
+> 注意：普通 AI 对话（`/bot-api/chat`）不需要提前确认身份，系统会自动创建匿名账号。只有明确要操作知识库或记账数据时才需要确认。
 
 ### 指令识别
 

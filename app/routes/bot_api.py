@@ -75,6 +75,59 @@ def ping():
     return jsonify({'status': 'ok', 'service': 'knowledge-base-bot-api'})
 
 
+# ===================== User Check =====================
+
+@bot_api_bp.route('/user/check', methods=['GET'])
+def check_user():
+    """Check if a user exists by username.
+
+    Query params:
+      - username: the username to check (required)
+
+    This endpoint requires API token auth (Authorization header) but
+    does NOT require X-Bot-User header.
+
+    Response:
+      - exists=true:  {"exists": true, "username": "xxx", "created_at": "..."}
+      - exists=false: {"exists": false, "username": "xxx", "register_url": "http://..."}
+    """
+    # Verify token
+    auth_header = request.headers.get('Authorization', '')
+    if not auth_header.startswith('Bearer '):
+        return jsonify({'error': '缺少认证信息', 'code': 401}), 401
+    token = auth_header[7:].strip()
+    stored_token = SystemConfig.get('bot_api_token', '')
+    if not stored_token or token != stored_token:
+        return jsonify({'error': 'API Token 无效', 'code': 401}), 401
+
+    username = request.args.get('username', '').strip()
+    if not username:
+        return jsonify({'error': '缺少 username 参数', 'code': 400}), 400
+
+    # Search in multiple patterns: exact match, or bot_ prefixed
+    user = User.query.filter_by(username=username).first()
+    if not user:
+        user = User.query.filter_by(username=f'bot_{username}').first()
+
+    if user:
+        return jsonify({
+            'exists': True,
+            'username': user.username,
+            'role': user.role,
+            'scene': user.scene or 'general',
+            'created_at': user.created_at.strftime('%Y-%m-%d %H:%M') if user.created_at else '',
+            'note_count': user.notes.count(),
+            'conversation_count': user.conversations.count(),
+        })
+    else:
+        return jsonify({
+            'exists': False,
+            'username': username,
+            'register_url': 'http://106.55.226.176',
+            'message': f'用户 "{username}" 不存在，请先注册账号'
+        })
+
+
 # ===================== Chat =====================
 
 @bot_api_bp.route('/chat', methods=['POST'])

@@ -66,8 +66,15 @@ def _save_state(state):
         json.dump(state, f, ensure_ascii=False, indent=2)
 
 
-def _api_request(endpoint, data=None, method='POST'):
-    """发送 HTTP 请求到学习助手 API"""
+def _api_request(endpoint, data=None, method='POST', target_user=None):
+    """发送 HTTP 请求到学习助手 API
+
+    Args:
+        endpoint: API 路径（不含 /bot-api 前缀）
+        data: 请求体数据
+        method: HTTP 方法
+        target_user: 目标用户名（覆盖默认 USER_ID），用于操作指定用户的数据
+    """
     if not API_TOKEN or API_TOKEN == '在这里填入你的 Bot API Token':
         print('❌ 错误: 未配置 API Token')
         print(f'请编辑配置文件 {_CONFIG_FILE}')
@@ -76,10 +83,11 @@ def _api_request(endpoint, data=None, method='POST'):
         sys.exit(1)
 
     url = f'{API_BASE}/bot-api{endpoint}'
+    effective_user = target_user or USER_ID
     headers = {
         'Content-Type': 'application/json',
         'Authorization': f'Bearer {API_TOKEN}',
-        'X-Bot-User': USER_ID,
+        'X-Bot-User': effective_user,
     }
 
     if data and method != 'GET':
@@ -162,13 +170,13 @@ def cmd_user_check(username):
         sys.exit(1)
 
 
-def cmd_chat(message, enable_search=False):
+def cmd_chat(message, enable_search=False, target_user=None):
     """发送消息给 AI 助手"""
     state = _load_state()
 
     payload = {
         'message': message,
-        'user_id': USER_ID,
+        'user_id': target_user or USER_ID,
         'user_name': 'OpenClaw',
         'enable_search': enable_search,
     }
@@ -177,7 +185,7 @@ def cmd_chat(message, enable_search=False):
     if conv_id:
         payload['conversation_id'] = conv_id
 
-    result = _api_request('/chat', payload)
+    result = _api_request('/chat', payload, target_user=target_user)
 
     # 更新状态
     if result.get('conversation_id'):
@@ -206,10 +214,10 @@ def cmd_chat(message, enable_search=False):
     print(f'\n--- 对话: {result.get("conversation_title", "新对话")} (ID: {result.get("conversation_id")}) ---')
 
 
-def cmd_new(title='新对话'):
+def cmd_new(title='新对话', target_user=None):
     """新建对话"""
     state = _load_state()
-    result = _api_request('/conversations/new', {'user_id': USER_ID, 'title': title})
+    result = _api_request('/conversations/new', {'user_id': target_user or USER_ID, 'title': title}, target_user=target_user)
 
     if result.get('id'):
         state['conversation_id'] = result['id']
@@ -220,9 +228,9 @@ def cmd_new(title='新对话'):
         print(f'❌ 创建失败: {result}')
 
 
-def cmd_history():
+def cmd_history(target_user=None):
     """查看对话列表"""
-    result = _api_request('/conversations', method='GET')
+    result = _api_request('/conversations', method='GET', target_user=target_user)
 
     convs = result.get('conversations', [])
     if not convs:
@@ -239,16 +247,16 @@ def cmd_history():
         print(f'  {i}. {c["title"]} ({c["message_count"]}条, {c["updated_at"]}){marker}')
 
 
-def cmd_save(title, content, category='general', tags=''):
+def cmd_save(title, content, category='general', tags='', target_user=None):
     """保存笔记"""
     payload = {
-        'user_id': USER_ID,
+        'user_id': target_user or USER_ID,
         'title': title,
         'content': content,
         'category': category,
         'tags': tags,
     }
-    result = _api_request('/save-note', payload)
+    result = _api_request('/save-note', payload, target_user=target_user)
 
     if result.get('ok'):
         print(f'📝 已保存笔记: {result["title"]} (ID: {result["note_id"]})')
@@ -266,7 +274,7 @@ def cmd_switch(conv_id):
 
 # ===================== 知识库（笔记）命令 =====================
 
-def cmd_notes(keyword='', category='', page=1):
+def cmd_notes(keyword='', category='', page=1, target_user=None):
     """查看笔记列表"""
     params = f'?page={page}&per_page=20'
     if keyword:
@@ -274,7 +282,7 @@ def cmd_notes(keyword='', category='', page=1):
     if category:
         params += f'&category={urllib.parse.quote(category)}'
 
-    result = _api_request(f'/notes{params}', method='GET')
+    result = _api_request(f'/notes{params}', method='GET', target_user=target_user)
 
     notes = result.get('notes', [])
     total = result.get('total', 0)
@@ -294,9 +302,9 @@ def cmd_notes(keyword='', category='', page=1):
         print()
 
 
-def cmd_note_view(note_id):
+def cmd_note_view(note_id, target_user=None):
     """查看笔记详情"""
-    result = _api_request(f'/notes/{note_id}', method='GET')
+    result = _api_request(f'/notes/{note_id}', method='GET', target_user=target_user)
 
     print(f'📝 {result["title"]}')
     print(f'   分类: {result["category"]}  |  标签: {result.get("tags", "")}  |  ID: {result["id"]}')
@@ -305,14 +313,14 @@ def cmd_note_view(note_id):
     print(result.get('content', ''))
 
 
-def cmd_note_edit(note_id, **kwargs):
+def cmd_note_edit(note_id, target_user=None, **kwargs):
     """修改笔记"""
     data = {k: v for k, v in kwargs.items() if v is not None}
     if not data:
         print('❌ 请提供要修改的字段（--title / --content / --category / --tags）')
         sys.exit(1)
 
-    result = _api_request(f'/notes/{note_id}', data, method='PUT')
+    result = _api_request(f'/notes/{note_id}', data, method='PUT', target_user=target_user)
 
     if result.get('ok'):
         print(f'✅ 已更新笔记: {result["title"]} (ID: {result["note_id"]})')
@@ -320,9 +328,9 @@ def cmd_note_edit(note_id, **kwargs):
         print(f'❌ 更新失败: {result.get("error", "未知错误")}')
 
 
-def cmd_note_delete(note_id):
+def cmd_note_delete(note_id, target_user=None):
     """删除笔记"""
-    result = _api_request(f'/notes/{note_id}', method='DELETE')
+    result = _api_request(f'/notes/{note_id}', method='DELETE', target_user=target_user)
     if result.get('ok'):
         print(f'🗑️ {result["message"]}')
     else:
@@ -331,7 +339,7 @@ def cmd_note_delete(note_id):
 
 # ===================== 记账命令 =====================
 
-def cmd_finance_list(record_type='', category='', start_date='', end_date='', keyword='', page=1):
+def cmd_finance_list(record_type='', category='', start_date='', end_date='', keyword='', page=1, target_user=None):
     """查看记账列表"""
     params = f'?page={page}&per_page=20'
     if record_type:
@@ -345,7 +353,7 @@ def cmd_finance_list(record_type='', category='', start_date='', end_date='', ke
     if keyword:
         params += f'&q={urllib.parse.quote(keyword)}'
 
-    result = _api_request(f'/finance{params}', method='GET')
+    result = _api_request(f'/finance{params}', method='GET', target_user=target_user)
 
     records = result.get('records', [])
     total = result.get('total', 0)
@@ -369,7 +377,7 @@ def cmd_finance_list(record_type='', category='', start_date='', end_date='', ke
     print(f'  📊 结余:   ¥{summary.get("balance", 0):.2f}')
 
 
-def cmd_finance_add(record_type, amount, category, description='', date=''):
+def cmd_finance_add(record_type, amount, category, description='', date='', target_user=None):
     """新增记账"""
     data = {
         'record_type': record_type,
@@ -380,7 +388,7 @@ def cmd_finance_add(record_type, amount, category, description='', date=''):
     if date:
         data['date'] = date
 
-    result = _api_request('/finance', data)
+    result = _api_request('/finance', data, target_user=target_user)
 
     if result.get('ok'):
         print(f'✅ {result["message"]} (ID: {result["record_id"]})')
@@ -388,14 +396,14 @@ def cmd_finance_add(record_type, amount, category, description='', date=''):
         print(f'❌ 添加失败: {result.get("error", "未知错误")}')
 
 
-def cmd_finance_edit(record_id, **kwargs):
+def cmd_finance_edit(record_id, target_user=None, **kwargs):
     """修改记账"""
     data = {k: v for k, v in kwargs.items() if v is not None}
     if not data:
         print('❌ 请提供要修改的字段')
         sys.exit(1)
 
-    result = _api_request(f'/finance/{record_id}', data, method='PUT')
+    result = _api_request(f'/finance/{record_id}', data, method='PUT', target_user=target_user)
 
     if result.get('ok'):
         print(f'✅ {result["message"]}')
@@ -403,18 +411,18 @@ def cmd_finance_edit(record_id, **kwargs):
         print(f'❌ 修改失败: {result.get("error", "未知错误")}')
 
 
-def cmd_finance_delete(record_id):
+def cmd_finance_delete(record_id, target_user=None):
     """删除记账"""
-    result = _api_request(f'/finance/{record_id}', method='DELETE')
+    result = _api_request(f'/finance/{record_id}', method='DELETE', target_user=target_user)
     if result.get('ok'):
         print(f'🗑️ {result["message"]}')
     else:
         print(f'❌ 删除失败: {result.get("error", "未知错误")}')
 
 
-def cmd_finance_categories():
+def cmd_finance_categories(target_user=None):
     """查看记账分类"""
-    result = _api_request('/finance/categories', method='GET')
+    result = _api_request('/finance/categories', method='GET', target_user=target_user)
     print('💰 支出分类:')
     for c in result.get('expense_categories', []):
         print(f'  • {c}')
@@ -429,7 +437,16 @@ def cmd_help():
     print(f"""🤖 学习助手 - OpenClaw Skill
 
 用法:
-  python agent.py <command> [arguments]
+  python agent.py <command> [arguments] [--user <username>]
+
+全局参数:
+  --user <username>           指定操作的目标用户（记账/笔记会写入该用户账号）
+                              不指定则使用 config.json 中的默认 user_id
+
+⚠️ 数据归属说明:
+  记账和笔记数据归属于 --user 指定的用户账号。
+  操作他人数据前，请先用 user-check 确认用户存在。
+  示例: python agent.py --user 张三 finance
 
 对话命令:
   chat <message>              和 AI 对话
@@ -467,9 +484,9 @@ def cmd_help():
 
 示例:
   python agent.py chat "帮我讲讲Python的装饰器"
-  python agent.py notes --search "装饰器"
-  python agent.py finance --start 2026-03-01
-  python agent.py finance-add expense 30 餐饮 "午饭"
+  python agent.py --user 张三 notes --search "装饰器"
+  python agent.py --user 张三 finance --start 2026-03-01
+  python agent.py --user 张三 finance-add expense 30 餐饮 "午饭"
 """)
 
 
@@ -495,118 +512,136 @@ def main():
         cmd_help()
         return
 
-    command = sys.argv[1].lower()
+    # Parse global --user argument (can appear anywhere before the command)
+    argv = list(sys.argv[1:])
+    target_user = None
+    if '--user' in argv:
+        idx = argv.index('--user')
+        if idx + 1 < len(argv):
+            target_user = argv[idx + 1]
+            argv = argv[:idx] + argv[idx + 2:]  # remove --user and its value
+        else:
+            print('❌ --user 需要指定用户名')
+            sys.exit(1)
+
+    if not argv:
+        cmd_help()
+        return
+
+    command = argv[0].lower()
 
     if command == 'ping':
         cmd_ping()
     elif command == 'user-check':
-        if len(sys.argv) < 3:
+        if len(argv) < 2:
             print('❌ 用法: python agent.py user-check <username>')
             sys.exit(1)
-        cmd_user_check(sys.argv[2])
+        cmd_user_check(argv[1])
     elif command == 'chat':
-        if len(sys.argv) < 3:
+        if len(argv) < 2:
             print('❌ 用法: python agent.py chat <message>')
             sys.exit(1)
         enable_search = False
-        msg_start = 2
-        if sys.argv[2] == '--search':
+        msg_start = 1
+        if argv[1] == '--search':
             enable_search = True
-            msg_start = 3
-        if len(sys.argv) <= msg_start:
+            msg_start = 2
+        if len(argv) <= msg_start:
             print('❌ 请提供消息内容')
             sys.exit(1)
-        message = ' '.join(sys.argv[msg_start:])
-        cmd_chat(message, enable_search)
+        message = ' '.join(argv[msg_start:])
+        cmd_chat(message, enable_search, target_user=target_user)
     elif command == 'new':
-        title = ' '.join(sys.argv[2:]) if len(sys.argv) > 2 else '新对话'
-        cmd_new(title)
+        title = ' '.join(argv[1:]) if len(argv) > 1 else '新对话'
+        cmd_new(title, target_user=target_user)
     elif command in ('history', 'list'):
-        cmd_history()
+        cmd_history(target_user=target_user)
     elif command == 'switch':
-        if len(sys.argv) < 3:
+        if len(argv) < 2:
             print('❌ 用法: python agent.py switch <conversation_id>')
             sys.exit(1)
-        cmd_switch(sys.argv[2])
+        cmd_switch(argv[1])
     elif command == 'save':
-        if len(sys.argv) < 4:
+        if len(argv) < 3:
             print('❌ 用法: python agent.py save <title> <content>')
             sys.exit(1)
-        title = sys.argv[2]
-        content = ' '.join(sys.argv[3:])
-        cmd_save(title, content)
+        title = argv[1]
+        content = ' '.join(argv[2:])
+        cmd_save(title, content, target_user=target_user)
 
     # ---- 知识库命令 ----
     elif command == 'notes':
-        args = _parse_named_args(sys.argv[2:], ['search', 'category', 'page'])
+        args = _parse_named_args(argv[1:], ['search', 'category', 'page'])
         cmd_notes(
             keyword=args.get('search', ''),
             category=args.get('category', ''),
-            page=int(args.get('page', 1))
+            page=int(args.get('page', 1)),
+            target_user=target_user
         )
     elif command == 'note':
-        if len(sys.argv) < 3:
+        if len(argv) < 2:
             print('❌ 用法: python agent.py note <id>')
             sys.exit(1)
-        cmd_note_view(int(sys.argv[2]))
+        cmd_note_view(int(argv[1]), target_user=target_user)
     elif command == 'note-edit':
-        if len(sys.argv) < 3:
+        if len(argv) < 2:
             print('❌ 用法: python agent.py note-edit <id> --title "新标题" --content "新内容"')
             sys.exit(1)
-        note_id = int(sys.argv[2])
-        args = _parse_named_args(sys.argv[3:], ['title', 'content', 'category', 'tags', 'folder'])
-        cmd_note_edit(note_id, **args)
+        note_id = int(argv[1])
+        args = _parse_named_args(argv[2:], ['title', 'content', 'category', 'tags', 'folder'])
+        cmd_note_edit(note_id, target_user=target_user, **args)
     elif command == 'note-del':
-        if len(sys.argv) < 3:
+        if len(argv) < 2:
             print('❌ 用法: python agent.py note-del <id>')
             sys.exit(1)
-        cmd_note_delete(int(sys.argv[2]))
+        cmd_note_delete(int(argv[1]), target_user=target_user)
 
     # ---- 记账命令 ----
     elif command == 'finance':
-        args = _parse_named_args(sys.argv[2:], ['type', 'category', 'start', 'end', 'search', 'page'])
+        args = _parse_named_args(argv[1:], ['type', 'category', 'start', 'end', 'search', 'page'])
         cmd_finance_list(
             record_type=args.get('type', ''),
             category=args.get('category', ''),
             start_date=args.get('start', ''),
             end_date=args.get('end', ''),
             keyword=args.get('search', ''),
-            page=int(args.get('page', 1))
+            page=int(args.get('page', 1)),
+            target_user=target_user
         )
     elif command == 'finance-add':
         # finance-add <type> <amount> <category> [description] [date]
-        if len(sys.argv) < 5:
+        if len(argv) < 4:
             print('❌ 用法: python agent.py finance-add <expense|income> <金额> <分类> [描述] [日期YYYY-MM-DD]')
             sys.exit(1)
-        rt = sys.argv[2]
-        amount = sys.argv[3]
-        cat = sys.argv[4]
-        desc = sys.argv[5] if len(sys.argv) > 5 else ''
-        dt = sys.argv[6] if len(sys.argv) > 6 else ''
-        cmd_finance_add(rt, amount, cat, desc, dt)
+        rt = argv[1]
+        amount = argv[2]
+        cat = argv[3]
+        desc = argv[4] if len(argv) > 4 else ''
+        dt = argv[5] if len(argv) > 5 else ''
+        cmd_finance_add(rt, amount, cat, desc, dt, target_user=target_user)
     elif command == 'finance-edit':
-        if len(sys.argv) < 3:
+        if len(argv) < 2:
             print('❌ 用法: python agent.py finance-edit <id> --amount 99 --category 教育')
             sys.exit(1)
-        record_id = int(sys.argv[2])
-        args = _parse_named_args(sys.argv[3:], ['record_type', 'amount', 'category', 'description', 'date'])
+        record_id = int(argv[1])
+        args = _parse_named_args(argv[2:], ['record_type', 'amount', 'category', 'description', 'date'])
         if 'amount' in args:
             args['amount'] = float(args['amount'])
-        cmd_finance_edit(record_id, **args)
+        cmd_finance_edit(record_id, target_user=target_user, **args)
     elif command == 'finance-del':
-        if len(sys.argv) < 3:
+        if len(argv) < 2:
             print('❌ 用法: python agent.py finance-del <id>')
             sys.exit(1)
-        cmd_finance_delete(int(sys.argv[2]))
+        cmd_finance_delete(int(argv[1]), target_user=target_user)
     elif command in ('finance-cat', 'finance-categories'):
-        cmd_finance_categories()
+        cmd_finance_categories(target_user=target_user)
 
     elif command in ('help', '-h', '--help'):
         cmd_help()
     else:
         # 当作聊天消息处理
-        message = ' '.join(sys.argv[1:])
-        cmd_chat(message)
+        message = ' '.join(argv)
+        cmd_chat(message, target_user=target_user)
 
 
 if __name__ == '__main__':

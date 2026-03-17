@@ -26,7 +26,16 @@ bot_api_bp = Blueprint('bot_api', __name__, url_prefix='/bot-api')
 # ===================== Auth Decorator =====================
 
 def _bot_auth_required(f):
-    """Verify bot API token and resolve target user."""
+    """Verify bot API token and resolve target user.
+
+    User resolution order:
+    1. Exact match: look up username as-is (supports registered users)
+    2. Bot-prefixed match: look up 'bot_<user_id>'
+    3. Auto-create: create 'bot_<user_id>' if neither found
+
+    This allows OpenClaw to pass a registered user's real username
+    (e.g. X-Bot-User: 张三) and operate on their actual account.
+    """
     @wraps(f)
     def decorated(*args, **kwargs):
         # Check token
@@ -49,12 +58,16 @@ def _bot_auth_required(f):
         if not bot_user_id:
             return jsonify({'error': '缺少用户标识 (X-Bot-User header 或 user_id 字段)', 'code': 400}), 400
 
-        # Find or auto-create user by bot_user_id
-        # Use a prefixed username to distinguish bot-created users
-        username = f'bot_{bot_user_id}'
-        user = User.query.filter_by(username=username).first()
+        # Step 1: Try exact match (supports registered website users)
+        user = User.query.filter_by(username=bot_user_id).first()
+
+        # Step 2: Try bot-prefixed match
         if not user:
-            # Auto-create user for this bot identity
+            user = User.query.filter_by(username=f'bot_{bot_user_id}').first()
+
+        # Step 3: Auto-create with bot_ prefix (for anonymous/new bot users)
+        if not user:
+            username = f'bot_{bot_user_id}'
             user = User(username=username, role='user')
             user.set_password(secrets.token_hex(16))  # random password
             user.bio = f'由机器人自动创建 (ID: {bot_user_id})'
@@ -113,6 +126,7 @@ def check_user():
         return jsonify({
             'exists': True,
             'username': user.username,
+            'bot_user_id': user.username,  # Use this as X-Bot-User header value
             'role': user.role,
             'scene': user.scene or 'general',
             'created_at': user.created_at.strftime('%Y-%m-%d %H:%M') if user.created_at else '',
@@ -126,6 +140,43 @@ def check_user():
             'register_url': 'http://106.55.226.176',
             'message': f'用户 "{username}" 不存在，请先注册账号'
         })
+
+
+# ===================== Current User Info (for Web frontend) =====================
+
+@bot_api_bp.route('/user/me', methods=['GET'])
+def get_current_user_info():
+    """Get current logged-in user info (for Web frontend AJAX calls).
+
+    This uses Flask-Login session auth (not bot token).
+    Returns the currently logged-in user's info so the frontend can
+    display who is using the AI assistant.
+
+    Response:
+      - logged_in=true:  {"logged_in": true, "username": "xxx", ...}
+      - logged_in=false: {"logged_in": false}
+    """
+    from flask_login import current_user
+
+    try:
+        if not current_user.is_authenticated:
+            return jsonify({'logged_in': False, 'message': '未登录'})
+
+        return jsonify({
+            'logged_in': True,
+            'user_id': current_user.id,
+            'username': current_user.username,
+            'role': current_user.role,
+            'scene': current_user.scene or 'general',
+            'bio': current_user.bio or '',
+            'interests': current_user.interests or '',
+            'current_learning': current_user.current_learning or '',
+            'created_at': current_user.created_at.strftime('%Y-%m-%d %H:%M') if current_user.created_at else '',
+            'note_count': current_user.notes.count() if hasattr(current_user, 'notes') else 0,
+            'conversation_count': current_user.conversations.count() if hasattr(current_user, 'conversations') else 0,
+        })
+    except Exception as e:
+        return jsonify({'logged_in': False, 'message': str(e)})
 
 
 # ===================== Chat =====================

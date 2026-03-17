@@ -82,6 +82,12 @@ AI: (查询账单并展示汇总)
 # ---- 用户查询 ----
 python agent.py user-check 张三              # 查询用户是否存在
 
+# ---- 指定目标用户操作（--user 参数） ----
+# 记账和笔记数据归属于 --user 指定的用户账号
+python agent.py --user 张三 finance          # 查看张三的记账
+python agent.py --user 张三 notes            # 查看张三的笔记
+python agent.py --user 张三 finance-add expense 30 餐饮 "午饭"  # 为张三记账
+
 # ---- 对话 ----
 python agent.py chat "你好"
 python agent.py chat --search "最新AI新闻"
@@ -114,6 +120,7 @@ python agent.py finance-cat                           # 查看分类
 |------|------|------|
 | `/bot-api/ping` | GET | 健康检查（无需认证） |
 | `/bot-api/user/check?username=xxx` | GET | 查询用户是否存在（需 Token，不需 X-Bot-User） |
+| `/bot-api/user/me` | GET | 获取当前登录用户信息（Web 前端用，基于 Session） |
 | `/bot-api/chat` | POST | AI 对话（含搜索/记账/URL分析） |
 | **对话管理** | | |
 | `/bot-api/conversations` | GET | 对话列表 |
@@ -133,9 +140,9 @@ python agent.py finance-cat                           # 查看分类
 | `/bot-api/finance/<id>` | DELETE | 删除记账 |
 | `/bot-api/finance/categories` | GET | 获取分类列表 |
 
-认证: `Authorization: Bearer <token>` + `X-Bot-User: <用户ID>`
+认证: `Authorization: Bearer <token>` + `X-Bot-User: <用户名>`
 
-> **数据隔离**：每个 user_id 只能查看和操作自己的数据。
+> **数据归属**：记账和笔记数据归属于 `X-Bot-User` 所指向的用户。系统会按以下顺序匹配用户：① 精确匹配用户名 → ② 匹配 `bot_` 前缀 → ③ 自动创建。传入注册的真实用户名可直接操作该账号。
 
 ## 架构
 

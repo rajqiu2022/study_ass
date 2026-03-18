@@ -40,7 +40,7 @@ def _load_config():
 
 _config = _load_config()
 
-API_BASE = _config.get('api_url', 'http://106.55.226.176')
+API_BASE = _config.get('api_url', 'https://testcase.work:8088')
 API_TOKEN = _config.get('token', '')
 USER_ID = _config.get('user_id', 'openclaw_user')
 USER_NAME = _config.get('user_name', 'OpenClaw')
@@ -159,7 +159,7 @@ def cmd_user_check(username):
                 print(f'   对话数: {result.get("conversation_count", 0)}')
             else:
                 print(f'❌ 用户 "{username}" 不存在')
-                print(f'   请先访问 {result.get("register_url", "http://106.55.226.176")} 注册账号')
+                print(f'   请先访问 {result.get("register_url", "https://testcase.work:8088")} 注册账号')
 
     except urllib.error.HTTPError as e:
         error_body = e.read().decode('utf-8', errors='replace')

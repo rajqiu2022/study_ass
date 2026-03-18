@@ -18,14 +18,14 @@ author: rajqiu
 
 ## 配置信息
 
-- **API 地址**: `http://106.55.226.176`
+- **API 地址**: `https://testcase.work:8088`
 - **认证方式**: Bearer Token（从学习助手管理后台生成）
 - **Token 配置**: 写在同目录下的 `config.json` 文件中
 
 ### config.json 格式
 ```json
 {
-  "api_url": "http://106.55.226.176",
+  "api_url": "https://testcase.work:8088",
   "token": "你的 Bot API Token",
   "user_id": "你在网站注册的用户名",
   "user_name": "OpenClaw"
@@ -77,12 +77,12 @@ GET /bot-api/user/check?username=张三
 {
     "exists": false,
     "username": "张三",
-    "register_url": "http://106.55.226.176",
+    "register_url": "https://testcase.work:8088",
     "message": "用户 \"张三\" 不存在，请先注册账号"
 }
 ```
 
-> ⚠️ **重要**：在使用知识库、记账等任何需要用户身份的功能之前，**必须先调用此接口确认用户账号存在**。如果不存在，告知对方先去 http://106.55.226.176 注册。
+> ⚠️ **重要**：在使用知识库、记账等任何需要用户身份的功能之前，**必须先调用此接口确认用户账号存在**。如果不存在，告知对方先去 https://testcase.work:8088 注册。
 
 ---
 
@@ -363,7 +363,7 @@ GET /bot-api/finance/categories
 2. **调用查询接口**：`GET /bot-api/user/check?username=用户名`
 3. **判断结果**：
    - 如果 `exists: true` → **取响应中的 `bot_user_id` 字段**，用它作为后续所有请求的 `X-Bot-User` header 值或 `user_id` 字段值。这样数据会正确写入该用户的账号下。
-   - 如果 `exists: false` → 告知对方："你的账号还未注册，请先访问 http://106.55.226.176 注册一个账号，然后再来找我。"**不要继续执行操作**
+   - 如果 `exists: false` → 告知对方："你的账号还未注册，请先访问 https://testcase.work:8088 注册一个账号，然后再来找我。"**不要继续执行操作**
 4. **记住身份**：同一次会话中，确认过一次就够了，后续操作不需要重复询问
 
 > ⚠️ **关键**：一定要用 `bot_user_id`（即用户在网站注册的真实用户名）作为 `X-Bot-User`，而不是随便取一个标识。这决定了记账和笔记数据归属到哪个账号。

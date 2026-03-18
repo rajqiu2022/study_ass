@@ -1,14 +1,14 @@
 [Unit]
-Description=Knowledge App (Flask + Gunicorn)
+Description=Study Assistant (Flask + Gunicorn)
 After=network.target
 
 [Service]
 User=www-data
 Group=www-data
-WorkingDirectory=/opt/knowledge-app
-Environment="PATH=/opt/knowledge-app/venv/bin"
-EnvironmentFile=/opt/knowledge-app/.env
-ExecStart=/opt/knowledge-app/venv/bin/gunicorn -c gunicorn.conf.py run:app
+WorkingDirectory=/opt/study-assistant
+Environment="PATH=/opt/study-assistant/venv/bin"
+EnvironmentFile=/opt/study-assistant/.env
+ExecStart=/opt/study-assistant/venv/bin/gunicorn -c gunicorn.conf.py run:app
 Restart=always
 RestartSec=5
 

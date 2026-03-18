@@ -137,7 +137,7 @@ def check_user():
         return jsonify({
             'exists': False,
             'username': username,
-            'register_url': 'http://106.55.226.176',
+            'register_url': 'https://testcase.work:8088',
             'message': f'用户 "{username}" 不存在，请先注册账号'
         })
 

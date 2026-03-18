@@ -1,17 +1,19 @@
 #!/bin/bash
 # ============================================
-# 知识管理应用 - 腾讯云一键部署脚本
+# 学习助手 - testcase.work 部署脚本
 # 适用于 Ubuntu 20.04 / 22.04 / 24.04
+# 端口：8088
 # ============================================
 
 set -e
 
-APP_DIR="/opt/knowledge-app"
+APP_DIR="/opt/study-assistant"
 APP_USER="www-data"
 PYTHON_VERSION="python3"
+SERVICE_NAME="study-assistant"
 
 echo "========================================"
-echo "  知识管理应用 - 一键部署"
+echo "  学习助手 - 一键部署 (端口 8088)"
 echo "========================================"
 
 # ----- 1. 系统更新 & 安装依赖 -----
@@ -91,20 +93,20 @@ with app.app_context():
 # ----- 6. 配置 Systemd 服务 -----
 echo ""
 echo "[6/7] 配置系统服务..."
-cp $APP_DIR/deploy/knowledge-app.service /etc/systemd/system/knowledge-app.service
+cp $APP_DIR/deploy/knowledge-app.service /etc/systemd/system/${SERVICE_NAME}.service
 systemctl daemon-reload
-systemctl enable knowledge-app
-systemctl restart knowledge-app
+systemctl enable ${SERVICE_NAME}
+systemctl restart ${SERVICE_NAME}
 echo "  ✅ 系统服务配置完成（已设为开机自启）"
 
 # ----- 7. 配置 Nginx -----
 echo ""
 echo "[7/7] 配置 Nginx..."
-cp $APP_DIR/deploy/nginx.conf /etc/nginx/sites-available/knowledge-app
-ln -sf /etc/nginx/sites-available/knowledge-app /etc/nginx/sites-enabled/knowledge-app
+cp $APP_DIR/deploy/nginx.conf /etc/nginx/sites-available/${SERVICE_NAME}
+ln -sf /etc/nginx/sites-available/${SERVICE_NAME} /etc/nginx/sites-enabled/${SERVICE_NAME}
 
-# 删除默认站点（如果存在）
-rm -f /etc/nginx/sites-enabled/default
+# 注意：不删除默认站点，因为服务器上还有其他服务
+# rm -f /etc/nginx/sites-enabled/default
 
 # 测试并重启 Nginx
 nginx -t
@@ -125,20 +127,15 @@ echo "========================================"
 echo "  🎉 部署完成！"
 echo "========================================"
 echo ""
-
-# 获取服务器公网 IP
-PUBLIC_IP=$(curl -s ifconfig.me 2>/dev/null || echo "你的服务器IP")
-
-echo "  访问地址: http://$PUBLIC_IP"
+echo "  访问地址: https://testcase.work:8088"
 echo "  管理账号: admin"
 echo "  管理密码: 123321"
 echo ""
 echo "  常用命令:"
-echo "    查看状态:  systemctl status knowledge-app"
-echo "    重启应用:  systemctl restart knowledge-app"
-echo "    查看日志:  journalctl -u knowledge-app -f"
+echo "    查看状态:  systemctl status ${SERVICE_NAME}"
+echo "    重启应用:  systemctl restart ${SERVICE_NAME}"
+echo "    查看日志:  journalctl -u ${SERVICE_NAME} -f"
 echo "    Nginx日志: tail -f /var/log/nginx/access.log"
 echo ""
 echo "  ⚠️  请尽快登录后台修改管理员密码！"
-echo "  ⚠️  如需域名访问，请修改 /etc/nginx/sites-available/knowledge-app 中的 server_name"
 echo "========================================"

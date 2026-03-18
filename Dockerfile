@@ -11,6 +11,6 @@ COPY . .
 
 RUN mkdir -p /app/instance /app/obsidian_vaults
 
-EXPOSE 5000
+EXPOSE 8088
 
-CMD ["gunicorn", "--bind", "0.0.0.0:5000", "--workers", "2", "--timeout", "120", "--preload", "--access-logfile", "-", "--error-logfile", "-", "run:app"]
+CMD ["gunicorn", "--bind", "0.0.0.0:8088", "--workers", "2", "--timeout", "120", "--preload", "--access-logfile", "-", "--error-logfile", "-", "run:app"]

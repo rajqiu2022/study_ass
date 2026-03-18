@@ -36,7 +36,7 @@ New-Item -ItemType SymbolicLink -Path "$env:USERPROFILE\.openclaw\workspace\skil
 
 ```json
 {
-  "api_url": "http://106.55.226.176",
+  "api_url": "https://testcase.work:8088",
   "token": "把你的Token粘贴到这里",
   "user_id": "openclaw_user",
   "user_name": "OpenClaw"

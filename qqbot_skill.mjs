@@ -29,7 +29,7 @@ const QQ_APP_ID = '1903238384';
 const QQ_APP_SECRET = 'K5qcPC0odSI90skdWQKFB741zxwvvwxz';
 
 // AI 助手 Bot API 配置
-const BOT_API_BASE = 'http://127.0.0.1';  // 你的知识库服务地址
+const BOT_API_BASE = 'http://127.0.0.1:8088';  // 你的知识库服务地址（端口8088）
 const BOT_API_TOKEN = '';  // 从管理后台生成，填在这里
 
 // ===================== 状态管理 =====================
@@ -250,7 +250,7 @@ async function handleMessage(qqUserId, messageText, userName = '') {
                 `现在你的记账、笔记等数据都会记录到该账号下。`,
             ].join('\n');
         } else {
-            return `❌ 绑定失败: ${result.message}\n请先访问 http://106.55.226.176 注册账号。`;
+            return `❌ 绑定失败: ${result.message}\n请先访问 https://testcase.work:8088 注册账号。`;
         }
     }
 

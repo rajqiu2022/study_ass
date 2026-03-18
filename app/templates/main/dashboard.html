@@ -135,11 +135,13 @@
 
 {% block scripts %}
 <script>
-function deleteNote(noteId, title) {
-    if (!confirm('确定删除笔记「' + title + '...」？')) return;
-    fetch(`/notes/${noteId}/delete`, {method: 'POST', headers: {'X-Requested-With': 'XMLHttpRequest'}})
-        .then(r => r.ok ? location.reload() : alert('删除失败'))
-        .catch(() => alert('删除失败'));
+async function deleteNote(noteId, title) {
+    const ok = await showConfirm('确定删除笔记「' + title + '」？');
+    if (!ok) return;
+    try {
+        const r = await fetch(`/notes/${noteId}/delete`, {method:'POST', headers:{'X-Requested-With':'XMLHttpRequest'}});
+        if (r.ok) location.reload(); else showConfirm('删除失败，请重试');
+    } catch(e) { showConfirm('删除失败，请重试'); }
 }
 </script>
 {% endblock %}

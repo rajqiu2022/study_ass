@@ -934,18 +934,35 @@ def send_message():
                 finance_data['date'] = finance_saved.record_date.strftime('%Y-%m-%d') if hasattr(finance_saved.record_date, 'strftime') else str(finance_saved.record_date)
             result_data['finance_record'] = finance_data
 
-        # --- Save note AFTER LLM response (same logic as /save-note endpoint) ---
+        # --- Save note AFTER LLM response ---
         if should_save_note:
-            # Auto-generate title from first line (same as save_to_note endpoint)
-            first_line = response_text.split('\n')[0]
-            note_title = re.sub(r'[#*\-\[\]()]', '', first_line).strip()[:50] or 'AI 笔记'
+            # Use LLM to generate title and tags based on the AI response content
+            try:
+                meta_prompt = [
+                    {'role': 'system', 'content': '你是一个文档管理助手。根据用户提供的文章内容，生成一个简短准确的中文标题和3-5个标签。\n'
+                     '严格按以下 JSON 格式输出，不要输出其他内容：\n'
+                     '{"title": "文章标题", "tags": "标签1,标签2,标签3"}'},
+                    {'role': 'user', 'content': f'请为以下内容生成标题和标签：\n\n{response_text[:2000]}'}
+                ]
+                meta_resp = _call_llm(api_base, api_key, model, meta_prompt, max_tokens=200, temperature=0.3)
+                # Parse JSON from LLM response
+                meta_json = json.loads(re.search(r'\{.*\}', meta_resp, re.DOTALL).group())
+                note_title = meta_json.get('title', '')[:100].strip()
+                note_tags = meta_json.get('tags', '').strip()
+            except Exception:
+                # Fallback: use webpage title from url_contents
+                note_title = url_contents[0].get('title', 'AI 笔记')[:100] if url_contents else 'AI 笔记'
+                note_tags = ''
+
+            if not note_title:
+                note_title = url_contents[0].get('title', 'AI 笔记')[:100] if url_contents else 'AI 笔记'
 
             note = Note(
                 user_id=current_user.id,
                 title=note_title,
                 content=response_text,
                 category='general',
-                tags='',
+                tags=note_tags,
                 source_type='ai_assistant',
                 folder='/'
             )

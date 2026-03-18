@@ -873,33 +873,18 @@ def send_message():
                         f'可以提醒用户在「记账报表」页面查看详细统计。'
                     )
 
-        # --- Note Saving ---
+        # --- Note Saving (flag only; actual save happens after LLM response) ---
+        should_save_note = intent.get('is_note') and url_contents
         note_saved = None
-        if intent.get('is_note') and url_contents:
-            # Auto-save URL content as note
-            for uc in url_contents:
-                note_title = uc.get('title', '网页笔记')[:100]
-                note_content = f"# {note_title}\n\n来源: {uc['url']}\n\n{uc['text']}"
-                note = Note(
-                    user_id=current_user.id,
-                    title=note_title,
-                    content=note_content,
-                    category='general',
-                    tags='网页抓取',
-                    source_url=uc['url'],
-                    source_type='ai_assistant',
-                    folder='/'
-                )
-                db.session.add(note)
-                note_saved = note
-                actions_taken.append(f'已保存笔记: {note_title[:30]}')
-            if note_saved:
-                db.session.commit()
-                extra_context += (
-                    f'\n\n[系统提示] 已自动保存笔记到知识库：\n'
-                    f'- 标题：{note_saved.title}\n'
-                    f'请在回复中确认已帮用户保存，并简要说明可以在「知识库」页面查看和管理。'
-                )
+        if should_save_note:
+            # Tell LLM to format content nicely for saving
+            source_urls = [uc['url'] for uc in url_contents]
+            extra_context += (
+                '\n\n[系统提示] 用户希望将以上链接内容整理后保存到知识库。'
+                '请在回复中对网页内容进行结构化整理（提炼标题、分类、标签、核心摘要、关键要点等），'
+                '输出格式清晰的 Markdown。系统将自动把你的回复保存为笔记。'
+                '请在回复开头用简短一行确认已保存，然后输出整理后的内容。'
+            )
 
         # --- Build LLM messages ---
         system_prompt = _build_system_prompt(conv, extra_context)
@@ -957,6 +942,34 @@ def send_message():
             else:
                 finance_data['date'] = finance_saved.record_date.strftime('%Y-%m-%d') if hasattr(finance_saved.record_date, 'strftime') else str(finance_saved.record_date)
             result_data['finance_record'] = finance_data
+
+        # --- Save note AFTER LLM response (save the AI-curated content, not raw text) ---
+        if should_save_note:
+            # Extract title from AI response (first non-empty line without markdown symbols)
+            note_title = ''
+            for line in response_text.split('\n'):
+                clean = re.sub(r'[#*✅\-\[\]()（）|]', '', line).strip()
+                if clean and len(clean) > 3:
+                    note_title = clean[:100]
+                    break
+            if not note_title:
+                note_title = url_contents[0].get('title', '网页笔记')[:100] if url_contents else '网页笔记'
+
+            source_url = url_contents[0]['url'] if url_contents else ''
+            note = Note(
+                user_id=current_user.id,
+                title=note_title,
+                content=response_text,
+                category='general',
+                tags='网页抓取',
+                source_url=source_url,
+                source_type='ai_assistant',
+                folder='/'
+            )
+            db.session.add(note)
+            db.session.commit()
+            note_saved = note
+            actions_taken.append(f'已保存笔记: {note_title[:30]}')
 
         if note_saved:
             result_data['note_saved'] = {

@@ -215,6 +215,18 @@
             background:rgba(99,102,241,0.08); color:var(--accent-hover);
             border:1px solid rgba(99,102,241,0.15);
         }
+        .note-card { position:relative; }
+        .note-card-delete {
+            position:absolute; top:8px; right:8px;
+            width:28px; height:28px; border-radius:6px;
+            background:rgba(239,68,68,0.1); color:#f87171;
+            border:none; cursor:pointer; opacity:0;
+            transition:opacity 0.15s, background 0.15s;
+            display:flex; align-items:center; justify-content:center;
+            z-index:10;
+        }
+        .note-card:hover .note-card-delete { opacity:1; }
+        .note-card-delete:hover { background:rgba(239,68,68,0.2); }
 
         /* Category filter buttons */
         .cat-btn {

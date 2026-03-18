@@ -45,20 +45,23 @@
             {% if recent_notes %}
             <div class="notes-grid" style="grid-template-columns:1fr;">
                 {% for note in recent_notes %}
-                <a href="{{ url_for('notes.view_note', note_id=note.id) }}" class="note-card">
-                    <div class="note-card-title">
-                        {% if note.source_type == 'video' %}<i class="ri-video-line" style="color:#f87171;"></i>
-                        {% elif note.source_type == 'article' %}<i class="ri-article-line" style="color:#818cf8;"></i>
-                        {% else %}<i class="ri-file-text-line" style="color:var(--accent);"></i>{% endif %}
-                        {{ note.title }}
-                    </div>
-                    <div class="note-card-excerpt">{{ note.content[:100] }}</div>
-                    <div class="note-card-meta">
-                        <span class="tag tag-{{ note.category or 'topic' }}">{{ {'work':'工作','study':'学习','life':'生活','tech':'技术','finance':'理财','health':'健康'}.get(note.category, note.category or '通用') }}</span>
-                        {% if note.tags %}<span><i class="ri-price-tag-3-line"></i> {{ note.tags[:30] }}</span>{% endif %}
-                        <span><i class="ri-time-line"></i> {{ note.updated_at.strftime('%m-%d %H:%M') }}</span>
-                    </div>
-                </a>
+                <div class="note-card">
+                    <button class="note-card-delete" onclick="event.preventDefault();deleteNote({{ note.id }}, '{{ note.title[:20] | e }}')" title="删除"><i class="ri-delete-bin-line"></i></button>
+                    <a href="{{ url_for('notes.view_note', note_id=note.id) }}" style="display:block; color:inherit; text-decoration:none;">
+                        <div class="note-card-title">
+                            {% if note.source_type == 'video' %}<i class="ri-video-line" style="color:#f87171;"></i>
+                            {% elif note.source_type == 'article' %}<i class="ri-article-line" style="color:#818cf8;"></i>
+                            {% else %}<i class="ri-file-text-line" style="color:var(--accent);"></i>{% endif %}
+                            {{ note.title }}
+                        </div>
+                        <div class="note-card-excerpt">{{ note.content[:100] }}</div>
+                        <div class="note-card-meta">
+                            <span class="tag tag-{{ note.category or 'topic' }}">{{ {'work':'工作','study':'学习','life':'生活','tech':'技术','finance':'理财','health':'健康'}.get(note.category, note.category or '通用') }}</span>
+                            {% if note.tags %}<span><i class="ri-price-tag-3-line"></i> {{ note.tags[:30] }}</span>{% endif %}
+                            <span><i class="ri-time-line"></i> {{ note.updated_at.strftime('%m-%d %H:%M') }}</span>
+                        </div>
+                    </a>
+                </div>
                 {% endfor %}
             </div>
             {% else %}
@@ -128,4 +131,15 @@
         </div>
     </div>
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function deleteNote(noteId, title) {
+    if (!confirm('确定删除笔记「' + title + '...」？')) return;
+    fetch(`/notes/${noteId}/delete`, {method: 'POST', headers: {'X-Requested-With': 'XMLHttpRequest'}})
+        .then(r => r.ok ? location.reload() : alert('删除失败'))
+        .catch(() => alert('删除失败'));
+}
+</script>
 {% endblock %}

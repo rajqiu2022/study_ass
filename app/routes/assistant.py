@@ -332,6 +332,18 @@ def _detect_intent(message):
     if (has_finance_kw and has_number) or (has_modify_kw and has_number):
         intent['is_finance'] = True
 
+    # Check if user wants to save a note
+    note_keywords = [
+        '保存', '存到知识库', '记笔记', '记下来', '整理保存', '存入笔记',
+        '加到知识库', '收藏', '存起来', '记入知识库', '写入笔记',
+        '帮我记', '帮我存', '保存笔记', '存为笔记'
+    ]
+    has_note_kw = any(kw in msg_lower for kw in note_keywords)
+    # Only trigger note intent if user wants to save AND there's context (URL or previous AI response)
+    # We'll check URL context later; for now just flag the intent
+    if has_note_kw:
+        intent['is_note'] = True
+
     return intent
 
 
@@ -783,8 +795,8 @@ def send_message():
         actions_taken = []  # track what we did for the user
 
         # --- URL Analysis ---
+        url_contents = []  # define early for note saving
         if intent['has_url']:
-            url_contents = []
             for url in intent['urls'][:3]:  # max 3 URLs
                 content, error = _fetch_url_content(url)
                 if content:
@@ -855,6 +867,33 @@ def send_message():
                         f'可以提醒用户在「记账报表」页面查看详细统计。'
                     )
 
+        # --- Note Saving ---
+        note_saved = None
+        if intent.get('is_note') and url_contents:
+            # Auto-save URL content as note
+            for uc in url_contents:
+                note_title = uc.get('title', '网页笔记')[:100]
+                note_content = f"# {note_title}\n\n来源: {uc['url']}\n\n{uc['text']}"
+                note = Note(
+                    user_id=current_user.id,
+                    title=note_title,
+                    content=note_content,
+                    category='general',
+                    tags='网页抓取',
+                    source_type='ai_assistant',
+                    folder='/'
+                )
+                db.session.add(note)
+                note_saved = note
+                actions_taken.append(f'已保存笔记: {note_title[:30]}')
+            if note_saved:
+                db.session.commit()
+                extra_context += (
+                    f'\n\n[系统提示] 已自动保存笔记到知识库：\n'
+                    f'- 标题：{note_saved.title}\n'
+                    f'请在回复中确认已帮用户保存，并简要说明可以在「知识库」页面查看和管理。'
+                )
+
         # --- Build LLM messages ---
         system_prompt = _build_system_prompt(conv, extra_context)
         llm_messages = [{'role': 'system', 'content': system_prompt}]
@@ -911,6 +950,12 @@ def send_message():
             else:
                 finance_data['date'] = finance_saved.record_date.strftime('%Y-%m-%d') if hasattr(finance_saved.record_date, 'strftime') else str(finance_saved.record_date)
             result_data['finance_record'] = finance_data
+
+        if note_saved:
+            result_data['note_saved'] = {
+                'id': note_saved.id,
+                'title': note_saved.title,
+            }
 
         return jsonify(result_data)
 

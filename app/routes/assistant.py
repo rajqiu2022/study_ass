@@ -881,9 +881,12 @@ def send_message():
             source_urls = [uc['url'] for uc in url_contents]
             extra_context += (
                 '\n\n[系统提示] 用户希望将以上链接内容整理后保存到知识库。'
-                '请在回复中对网页内容进行结构化整理（提炼标题、分类、标签、核心摘要、关键要点等），'
-                '输出格式清晰的 Markdown。系统将自动把你的回复保存为笔记。'
-                '请在回复开头用简短一行确认已保存，然后输出整理后的内容。'
+                '请按以下格式输出：\n'
+                '1. 第一行：简短确认（如"✅ 已保存"）\n'
+                '2. 第二行：空行\n'
+                '3. 第三行：`# 文章标题`（这是笔记标题，请提炼文章核心主题）\n'
+                '4. 后续：结构化整理的内容（摘要、分类、关键要点等）\n'
+                '系统会自动提取 `# ` 标题作为笔记名。'
             )
 
         # --- Build LLM messages ---
@@ -945,13 +948,19 @@ def send_message():
 
         # --- Save note AFTER LLM response (save the AI-curated content, not raw text) ---
         if should_save_note:
-            # Extract title from AI response (first non-empty line without markdown symbols)
+            # Extract title from AI response: find first Markdown heading (# )
             note_title = ''
             for line in response_text.split('\n'):
-                clean = re.sub(r'[#*✅\-\[\]()（）|]', '', line).strip()
-                if clean and len(clean) > 3:
-                    note_title = clean[:100]
+                if line.strip().startswith('# '):
+                    note_title = line.strip()[2:].strip()[:100]  # Remove '# ' prefix
                     break
+            if not note_title:
+                # Fallback: first non-empty meaningful line
+                for line in response_text.split('\n'):
+                    clean = re.sub(r'[#*✅\-\[\]()（）|]', '', line).strip()
+                    if clean and len(clean) > 3:
+                        note_title = clean[:100]
+                        break
             if not note_title:
                 note_title = url_contents[0].get('title', '网页笔记')[:100] if url_contents else '网页笔记'
 

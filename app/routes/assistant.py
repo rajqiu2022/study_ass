@@ -876,18 +876,6 @@ def send_message():
         # --- Note Saving (flag only; actual save happens after LLM response) ---
         should_save_note = intent.get('is_note') and url_contents
         note_saved = None
-        if should_save_note:
-            # Tell LLM to format content nicely for saving
-            source_urls = [uc['url'] for uc in url_contents]
-            extra_context += (
-                '\n\n[系统提示] 用户希望将以上链接内容整理后保存到知识库。'
-                '请按以下格式输出：\n'
-                '1. 第一行：简短确认（如"✅ 已保存"）\n'
-                '2. 第二行：空行\n'
-                '3. 第三行：`# 文章标题`（这是笔记标题，请提炼文章核心主题）\n'
-                '4. 后续：结构化整理的内容（摘要、分类、关键要点等）\n'
-                '系统会自动提取 `# ` 标题作为笔记名。'
-            )
 
         # --- Build LLM messages ---
         system_prompt = _build_system_prompt(conv, extra_context)
@@ -946,32 +934,18 @@ def send_message():
                 finance_data['date'] = finance_saved.record_date.strftime('%Y-%m-%d') if hasattr(finance_saved.record_date, 'strftime') else str(finance_saved.record_date)
             result_data['finance_record'] = finance_data
 
-        # --- Save note AFTER LLM response (save the AI-curated content, not raw text) ---
+        # --- Save note AFTER LLM response (same logic as /save-note endpoint) ---
         if should_save_note:
-            # Extract title from AI response: find first Markdown heading (# )
-            note_title = ''
-            for line in response_text.split('\n'):
-                if line.strip().startswith('# '):
-                    note_title = line.strip()[2:].strip()[:100]  # Remove '# ' prefix
-                    break
-            if not note_title:
-                # Fallback: first non-empty meaningful line
-                for line in response_text.split('\n'):
-                    clean = re.sub(r'[#*✅\-\[\]()（）|]', '', line).strip()
-                    if clean and len(clean) > 3:
-                        note_title = clean[:100]
-                        break
-            if not note_title:
-                note_title = url_contents[0].get('title', '网页笔记')[:100] if url_contents else '网页笔记'
+            # Auto-generate title from first line (same as save_to_note endpoint)
+            first_line = response_text.split('\n')[0]
+            note_title = re.sub(r'[#*\-\[\]()]', '', first_line).strip()[:50] or 'AI 笔记'
 
-            source_url = url_contents[0]['url'] if url_contents else ''
             note = Note(
                 user_id=current_user.id,
                 title=note_title,
                 content=response_text,
                 category='general',
-                tags='网页抓取',
-                source_url=source_url,
+                tags='',
                 source_type='ai_assistant',
                 folder='/'
             )

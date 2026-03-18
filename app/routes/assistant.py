@@ -270,8 +270,14 @@ def _fetch_url_content(url):
 
 
 def _extract_urls(text):
-    """Extract URLs from user message."""
-    url_pattern = r'https?://[^\s<>\"\'\)）\]】,，。、；;！!？?]+'
+    """Extract URLs from user message.
+    
+    Handles cases where URL and Chinese text are concatenated without space,
+    e.g. 'https://example.com/article整理完保存到知识库'
+    """
+    # Match URL but stop at CJK characters (Chinese/Japanese/Korean)
+    # Keep ASCII ? for query strings; exclude only fullwidth ？
+    url_pattern = r'https?://[^\s<>\"\'\)）\]】,，。、；;！!？\u4e00-\u9fff\u3400-\u4dbf\uf900-\ufaff]+'
     urls = re.findall(url_pattern, text)
     return urls
 

@@ -880,6 +880,7 @@ def send_message():
                     content=note_content,
                     category='general',
                     tags='网页抓取',
+                    source_url=uc['url'],
                     source_type='ai_assistant',
                     folder='/'
                 )

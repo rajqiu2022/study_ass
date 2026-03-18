@@ -163,10 +163,7 @@
                     <div class="action-btns">
                         <a href="{{ url_for('admin.user_detail', user_id=u.id) }}" class="btn btn-ghost btn-sm" title="查看详情"><i class="ri-eye-line"></i></a>
                         {% if not u.is_admin %}
-                        <form method="POST" action="{{ url_for('admin.delete_user', user_id=u.id) }}" 
-                              onsubmit="return confirm('确定删除用户 {{ u.username }} ？所有数据将被清除，不可恢复！')" style="margin:0;">
-                            <button type="submit" class="btn btn-ghost btn-sm" style="color:#ef4444;" title="删除用户"><i class="ri-delete-bin-line"></i></button>
-                        </form>
+                        <button type="button" class="btn btn-ghost btn-sm" style="color:#ef4444;margin:0;" title="删除用户" onclick="doDeleteUser2({{ u.id }}, '{{ u.username | e }}')"><i class="ri-delete-bin-line"></i></button>
                         {% endif %}
                     </div>
                 </td>
@@ -193,6 +190,15 @@ function filterUsers() {
         const name = tr.getAttribute('data-username') || '';
         tr.style.display = name.includes(q) ? '' : 'none';
     });
+}
+async function doDeleteUser2(userId, username) {
+    const ok = await showConfirm('确定删除用户 ' + username + ' ？所有数据将被清除，不可恢复！');
+    if (!ok) return;
+    const form = document.createElement('form');
+    form.method = 'POST';
+    form.action = '/admin/users/' + userId + '/delete';
+    document.body.appendChild(form);
+    form.submit();
 }
 </script>
 {% endblock %}

@@ -28,9 +28,7 @@
                     <button type="submit" class="btn btn-ghost"><i class="ri-lock-2-line"></i> 重置密码</button>
                 </div>
             </form>
-            <form method="POST" action="{{ url_for('admin.delete_user', user_id=target_user.id) }}" onsubmit="return confirm('确定删除 {{ target_user.username }} ？不可恢复！')">
-                <button type="submit" class="btn btn-danger"><i class="ri-delete-bin-line"></i> 删除用户</button>
-            </form>
+            <button type="button" class="btn btn-danger" onclick="doDeleteUser()"><i class="ri-delete-bin-line"></i> 删除用户</button>
         </div>
         <div class="card">
             <div class="card-title"><i class="ri-book-2-line"></i> 笔记 ({{ notes|length }})</div>
@@ -56,4 +54,18 @@
         </div>
     </div>
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+async function doDeleteUser() {
+    const ok = await showConfirm('确定删除 {{ target_user.username }} ？不可恢复！');
+    if (!ok) return;
+    const form = document.createElement('form');
+    form.method = 'POST';
+    form.action = '{{ url_for("admin.delete_user", user_id=target_user.id) }}';
+    document.body.appendChild(form);
+    form.submit();
+}
+</script>
 {% endblock %}

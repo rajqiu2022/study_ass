@@ -36,10 +36,22 @@
     {% if note.user_id == current_user.id %}
     <div style="margin-top:18px;display:flex;gap:10px;">
         <a href="{{ url_for('notes.edit_note', note_id=note.id) }}" class="btn btn-primary"><i class="ri-edit-line"></i> 编辑</a>
-        <form method="POST" action="{{ url_for('notes.delete_note', note_id=note.id) }}" onsubmit="return confirm('确定删除？')" style="display:inline;">
-            <button type="submit" class="btn btn-danger"><i class="ri-delete-bin-line"></i> 删除</button>
-        </form>
+        <button type="button" class="btn btn-danger" onclick="doDeleteNote()"><i class="ri-delete-bin-line"></i> 删除</button>
     </div>
     {% endif %}
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+async function doDeleteNote() {
+    const ok = await showConfirm('确定删除这条笔记？');
+    if (!ok) return;
+    const form = document.createElement('form');
+    form.method = 'POST';
+    form.action = '{{ url_for("notes.delete_note", note_id=note.id) }}';
+    document.body.appendChild(form);
+    form.submit();
+}
+</script>
 {% endblock %}

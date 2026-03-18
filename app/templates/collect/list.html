@@ -67,9 +67,7 @@
             {% elif c.status == 'pending' %}
             <a href="{{ url_for('collect.process_collection', collection_id=c.id) }}" class="btn btn-primary btn-sm"><i class="ri-magic-line"></i> 处理</a>
             {% endif %}
-            <form method="POST" action="{{ url_for('collect.delete_collection', collection_id=c.id) }}" onsubmit="return confirm('确定删除？')">
-                <button type="submit" class="btn btn-danger btn-sm" style="width:100%;"><i class="ri-delete-bin-line"></i></button>
-            </form>
+            <button type="button" class="btn btn-danger btn-sm" style="width:100%;" onclick="doDeleteCollection({{ c.id }})"><i class="ri-delete-bin-line"></i></button>
         </div>
     </div>
 </div>
@@ -83,4 +81,18 @@
     </div>
 </div>
 {% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+async function doDeleteCollection(id) {
+    const ok = await showConfirm('确定删除这条收集记录？');
+    if (!ok) return;
+    const form = document.createElement('form');
+    form.method = 'POST';
+    form.action = '/collect/' + id + '/delete';
+    document.body.appendChild(form);
+    form.submit();
+}
+</script>
 {% endblock %}

@@ -816,7 +816,8 @@ function switchConversation(convId) {
 }
 
 async function deleteConversation(convId) {
-    if (!confirm('确定删除这个对话？所有消息将被永久删除。')) return;
+    const ok = await showConfirm('确定删除这个对话？所有消息将被永久删除。');
+    if (!ok) return;
     try {
         await fetch('/assistant/conversations/' + convId + '/delete', {method:'POST'});
         if (convId === currentConvId) {

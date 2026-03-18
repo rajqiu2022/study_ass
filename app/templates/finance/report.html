@@ -445,7 +445,8 @@ renderTrendChart();
 
 // --- Delete Record ---
 async function deleteRecord(id) {
-    if (!confirm('确定删除这条记录？')) return;
+    const ok = await showConfirm('确定删除这条记录？');
+    if (!ok) return;
     try {
         const resp = await fetch('/finance/delete/' + id, { method: 'POST' });
         const data = await resp.json();

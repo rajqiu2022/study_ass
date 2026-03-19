@@ -531,7 +531,11 @@
             _confirmResolve = resolve;
             document.getElementById('confirmMsg').textContent = msg;
             document.getElementById('confirmDialog').classList.add('show');
-            document.getElementById('confirmOkBtn').onclick = function() { closeConfirm(); resolve(true); };
+            document.getElementById('confirmOkBtn').onclick = function() {
+                _confirmResolve = null;
+                document.getElementById('confirmDialog').classList.remove('show');
+                resolve(true);
+            };
         });
     }
     function closeConfirm() {

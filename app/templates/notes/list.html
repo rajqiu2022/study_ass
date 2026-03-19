@@ -16,13 +16,11 @@
         <span class="cat-count">{{ category_counts.get('__all__', 0) }}</span>
         {% endif %}
     </a>
-    {% if category_counts.get('favorite', 0) > 0 %}
     <a href="{{ url_for('notes.note_list', category='favorite', folder=current_folder, search=search) }}"
        class="cat-btn{% if current_category == 'favorite' %} cat-btn-active{% endif %}" style="{% if current_category == 'favorite' %}background:rgba(245,158,11,0.12);color:#fbbf24;border-color:#f59e0b;{% endif %}">
         <i class="ri-star-fill"></i> 收藏
-        <span class="cat-count">{{ category_counts.get('favorite', 0) }}</span>
+        <span class="cat-count" id="fav-count">{{ category_counts.get('favorite', 0) }}</span>
     </a>
-    {% endif %}
     {% for v, l in categories %}
     {% set icon_map = {'general':'ri-global-line','work':'ri-briefcase-line','study':'ri-book-open-line','life':'ri-heart-line','tech':'ri-code-s-slash-line','finance':'ri-money-cny-circle-line','health':'ri-heart-pulse-line'} %}
     {% if category_counts.get(v, 0) > 0 %}
@@ -72,7 +70,7 @@
         </div>
         <a href="{{ url_for('notes.view_note', note_id=n.id) }}" style="display:block; color:inherit; text-decoration:none;">
             <div class="note-card-title">
-                {% if n.is_favorited %}<i class="ri-star-fill" style="color:#fbbf24;font-size:12px;"></i>{% endif %}
+                {% if n.is_favorited %}<i class="ri-star-fill fav-title-star" style="color:#fbbf24;font-size:12px;"></i>{% endif %}
                 {% if n.source_type == 'video' %}<i class="ri-video-line" style="color:#f87171;"></i>
                 {% elif n.source_type == 'article' %}<i class="ri-article-line" style="color:#818cf8;"></i>
                 {% else %}<i class="ri-file-text-line" style="color:var(--accent);"></i>{% endif %}
@@ -120,6 +118,7 @@ async function toggleFavorite(noteId, btn) {
             const data = await r.json();
             const card = btn.closest('.note-card');
             const icon = btn.querySelector('i');
+            // 更新卡片上的收藏状态
             if (data.is_favorited) {
                 btn.classList.add('favorited');
                 btn.title = '取消收藏';
@@ -130,6 +129,24 @@ async function toggleFavorite(noteId, btn) {
                 btn.title = '收藏';
                 icon.className = 'ri-star-line';
                 card.classList.remove('has-fav');
+            }
+            // 更新卡片标题前的收藏星标
+            const titleEl = card.querySelector('.note-card-title');
+            if (titleEl) {
+                const existingStar = titleEl.querySelector('.fav-title-star');
+                if (data.is_favorited && !existingStar) {
+                    const star = document.createElement('i');
+                    star.className = 'ri-star-fill fav-title-star';
+                    star.style.cssText = 'color:#fbbf24;font-size:12px;';
+                    titleEl.insertBefore(star, titleEl.firstChild);
+                } else if (!data.is_favorited && existingStar) {
+                    existingStar.remove();
+                }
+            }
+            // 实时更新顶部收藏分类数量
+            const favCountEl = document.getElementById('fav-count');
+            if (favCountEl && data.fav_count !== undefined) {
+                favCountEl.textContent = data.fav_count;
             }
         }
     } catch(e) { console.error(e); }

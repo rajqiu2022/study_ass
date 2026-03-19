@@ -326,7 +326,8 @@ def toggle_favorite(note_id):
     db.session.commit()
     
     if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-        return jsonify({'ok': True, 'is_favorited': note.is_favorited})
+        fav_count = Note.query.filter_by(user_id=current_user.id, is_favorited=True).count()
+        return jsonify({'ok': True, 'is_favorited': note.is_favorited, 'fav_count': fav_count})
     
     flash('已' + ('收藏' if note.is_favorited else '取消收藏'), 'success')
     return redirect(url_for('notes.note_list'))

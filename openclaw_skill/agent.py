@@ -264,6 +264,99 @@ def cmd_save(title, content, category='general', tags='', target_user=None):
         print(f'❌ 保存失败: {result.get("error", "未知错误")}')
 
 
+def cmd_chat_save(message, enable_search=False, target_user=None):
+    """发送消息给 AI 并自动保存回复为笔记（两步操作）
+    
+    适用于：发送链接 + 保存意图的场景。
+    第一步：调用 /bot-api/chat 获取 AI 分析内容
+    第二步：调用 POST /bot-api/notes 真正保存笔记
+    """
+    # 第一步：调用 chat 获取 AI 分析
+    state = _load_state()
+    payload = {
+        'message': message,
+        'user_id': target_user or USER_ID,
+        'user_name': 'OpenClaw',
+        'enable_search': enable_search,
+    }
+    conv_id = state.get('conversation_id')
+    if conv_id:
+        payload['conversation_id'] = conv_id
+
+    print('📡 正在分析内容...')
+    result = _api_request('/chat', payload, target_user=target_user)
+
+    # 更新状态
+    if result.get('conversation_id'):
+        state['conversation_id'] = result['conversation_id']
+        state['conversation_title'] = result.get('conversation_title', '')
+        _save_state(state)
+
+    actions = result.get('actions', [])
+    if actions:
+        print(f'🔍 {" | ".join(actions)}')
+
+    response = result.get('response', '')
+    if not response:
+        print('❌ AI 未返回内容，无法保存')
+        return
+
+    print(response)
+    print()
+
+    # 第二步：从 AI 回复中提取标题并保存笔记
+    # 标题提取优先级：Markdown # 标题行 > 内容第一行
+    title = ''
+    for line in response.split('\n'):
+        line = line.strip()
+        if line.startswith('# '):
+            title = line[2:].strip()
+            break
+    if not title:
+        # 使用第一行非空内容
+        for line in response.split('\n'):
+            line = line.strip()
+            if line and not line.startswith('#'):
+                import re as _re
+                title = _re.sub(r'[#*\-\[\]()（）]', '', line).strip()[:80]
+                break
+    if not title:
+        title = 'AI 笔记'
+
+    # 简单分类判断
+    category = 'general'
+    msg_lower = message.lower()
+    if any(kw in msg_lower for kw in ['代码', '编程', '开发', 'python', 'java', 'code', '技术', 'api']):
+        category = 'study'
+    elif any(kw in msg_lower for kw in ['工作', '项目', '会议', '方案']):
+        category = 'work'
+
+    note_payload = {
+        'title': title,
+        'content': response,
+        'category': category,
+        'tags': '',
+    }
+
+    print(f'💾 正在保存笔记: {title}...')
+    note_result = _api_request('/notes', note_payload, target_user=target_user)
+
+    if note_result.get('ok'):
+        print(f'✅ 已保存笔记: {note_result["title"]} (ID: {note_result["note_id"]})')
+    else:
+        print(f'❌ 保存失败: {note_result.get("error", "未知错误")}')
+
+    # 记账信息
+    finance = result.get('finance_record')
+    if finance:
+        action_label = {'add': '已记录', 'update': '已修改', 'delete': '已删除'}.get(
+            finance.get('action', 'add'), '已处理'
+        )
+        print(f'\n💰 {action_label}: {finance["type"]} ¥{finance["amount"]} ({finance["category"]})')
+
+    print(f'\n--- 对话: {result.get("conversation_title", "新对话")} (ID: {result.get("conversation_id")}) ---')
+
+
 def cmd_switch(conv_id):
     """切换到指定对话"""
     state = _load_state()
@@ -451,6 +544,7 @@ def cmd_help():
 对话命令:
   chat <message>              和 AI 对话
   chat --search <message>     强制联网搜索后对话
+  chat-save <message>         对话 + 自动保存回复为笔记（链接保存专用）
   new [title]                 新建对话
   history                     查看对话列表
   switch <id>                 切换到指定对话
@@ -551,6 +645,21 @@ def main():
             sys.exit(1)
         message = ' '.join(argv[msg_start:])
         cmd_chat(message, enable_search, target_user=target_user)
+    elif command == 'chat-save':
+        if len(argv) < 2:
+            print('❌ 用法: python agent.py chat-save <message>')
+            print('   示例: python agent.py chat-save "https://example.com 帮我整理保存"')
+            sys.exit(1)
+        enable_search = False
+        msg_start = 1
+        if argv[1] == '--search':
+            enable_search = True
+            msg_start = 2
+        if len(argv) <= msg_start:
+            print('❌ 请提供消息内容')
+            sys.exit(1)
+        message = ' '.join(argv[msg_start:])
+        cmd_chat_save(message, enable_search, target_user=target_user)
     elif command == 'new':
         title = ' '.join(argv[1:]) if len(argv) > 1 else '新对话'
         cmd_new(title, target_user=target_user)

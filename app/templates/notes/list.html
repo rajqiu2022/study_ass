@@ -16,6 +16,13 @@
         <span class="cat-count">{{ category_counts.get('__all__', 0) }}</span>
         {% endif %}
     </a>
+    {% if category_counts.get('favorite', 0) > 0 %}
+    <a href="{{ url_for('notes.note_list', category='favorite', folder=current_folder, search=search) }}"
+       class="cat-btn{% if current_category == 'favorite' %} cat-btn-active{% endif %}" style="{% if current_category == 'favorite' %}background:rgba(245,158,11,0.12);color:#fbbf24;border-color:#f59e0b;{% endif %}">
+        <i class="ri-star-fill"></i> 收藏
+        <span class="cat-count">{{ category_counts.get('favorite', 0) }}</span>
+    </a>
+    {% endif %}
     {% for v, l in categories %}
     {% set icon_map = {'general':'ri-global-line','work':'ri-briefcase-line','study':'ri-book-open-line','life':'ri-heart-line','tech':'ri-code-s-slash-line','finance':'ri-money-cny-circle-line','health':'ri-heart-pulse-line'} %}
     {% if category_counts.get(v, 0) > 0 %}
@@ -56,10 +63,16 @@
 {% if notes %}
 <div class="notes-grid">
     {% for n in notes %}
-    <div class="note-card">
-        <button class="note-card-delete" onclick="deleteNote({{ n.id }}, '{{ n.title[:20] | e }}')" title="删除"><i class="ri-delete-bin-line"></i></button>
+    <div class="note-card{% if n.is_favorited %} has-fav{% endif %}">
+        <div class="note-card-actions">
+            <button class="note-action-btn note-card-fav{% if n.is_favorited %} favorited{% endif %}" onclick="toggleFavorite({{ n.id }}, this)" title="{{ '取消收藏' if n.is_favorited else '收藏' }}">
+                <i class="ri-star-{% if n.is_favorited %}fill{% else %}line{% endif %}"></i>
+            </button>
+            <button class="note-action-btn note-card-delete" onclick="deleteNote({{ n.id }}, '{{ n.title[:20] | e }}')" title="删除"><i class="ri-delete-bin-line"></i></button>
+        </div>
         <a href="{{ url_for('notes.view_note', note_id=n.id) }}" style="display:block; color:inherit; text-decoration:none;">
             <div class="note-card-title">
+                {% if n.is_favorited %}<i class="ri-star-fill" style="color:#fbbf24;font-size:12px;"></i>{% endif %}
                 {% if n.source_type == 'video' %}<i class="ri-video-line" style="color:#f87171;"></i>
                 {% elif n.source_type == 'article' %}<i class="ri-article-line" style="color:#818cf8;"></i>
                 {% else %}<i class="ri-file-text-line" style="color:var(--accent);"></i>{% endif %}
@@ -97,6 +110,31 @@
 
 {% block scripts %}
 <script>
+async function toggleFavorite(noteId, btn) {
+    try {
+        const r = await fetch(`/notes/${noteId}/toggle-favorite`, {
+            method:'POST',
+            headers:{'X-Requested-With':'XMLHttpRequest'}
+        });
+        if (r.ok) {
+            const data = await r.json();
+            const card = btn.closest('.note-card');
+            const icon = btn.querySelector('i');
+            if (data.is_favorited) {
+                btn.classList.add('favorited');
+                btn.title = '取消收藏';
+                icon.className = 'ri-star-fill';
+                card.classList.add('has-fav');
+            } else {
+                btn.classList.remove('favorited');
+                btn.title = '收藏';
+                icon.className = 'ri-star-line';
+                card.classList.remove('has-fav');
+            }
+        }
+    } catch(e) { console.error(e); }
+}
+
 async function deleteNote(noteId, title) {
     const ok = await showConfirm('确定删除笔记「' + title + '」？');
     if (!ok) return;

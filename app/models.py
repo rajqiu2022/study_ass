@@ -53,6 +53,7 @@ class Note(db.Model):
     category = db.Column(db.String(50), default='general')  # 'work','study','life','general'
     source_url = db.Column(db.Text, default='')  # original URL if from content collection
     source_type = db.Column(db.String(20), default='manual')  # 'manual','article','video'
+    is_favorited = db.Column(db.Boolean, default=False, index=True)  # 收藏标记
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     

@@ -195,6 +195,7 @@
         .tag-done { background:rgba(16,185,129,0.15); color:#34d399; }
         .tag-pending { background:rgba(245,158,11,0.15); color:#fbbf24; }
         .tag-error { background:rgba(239,68,68,0.15); color:#f87171; }
+        .tag-favorite { background:rgba(245,158,11,0.15); color:#fbbf24; }
 
         /* Note Cards */
         .notes-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(280px,1fr)); gap:14px; }
@@ -204,7 +205,7 @@
             transition:all 0.15s; text-decoration:none; color:inherit; display:block;
         }
         .note-card:hover { border-color:var(--accent); box-shadow:0 0 20px var(--accent-glow); }
-        .note-card-title { font-size:14px; font-weight:600; margin-bottom:6px; }
+        .note-card-title { font-size:14px; font-weight:600; margin-bottom:6px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; padding-right:68px; }
         .note-card-excerpt { font-size:12px; color:var(--text-secondary); line-height:1.5; display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden; }
         .note-card-meta { display:flex; align-items:center; gap:10px; margin-top:10px; font-size:11px; color:var(--text-muted); flex-wrap:wrap; }
         .note-card-tags { display:flex; gap:6px; margin-top:10px; flex-wrap:wrap; padding-top:10px; border-top:1px solid var(--border); }
@@ -216,17 +217,32 @@
             border:1px solid rgba(99,102,241,0.15);
         }
         .note-card { position:relative; }
-        .note-card-delete {
+        .note-card-actions {
             position:absolute; top:8px; right:8px;
-            width:28px; height:28px; border-radius:6px;
-            background:rgba(239,68,68,0.1); color:#f87171;
-            border:none; cursor:pointer; opacity:0;
-            transition:opacity 0.15s, background 0.15s;
-            display:flex; align-items:center; justify-content:center;
-            z-index:10;
+            display:flex; gap:4px; z-index:10; opacity:0;
+            transition:opacity 0.15s;
         }
-        .note-card:hover .note-card-delete { opacity:1; }
+        .note-card:hover .note-card-actions { opacity:1; }
+        .note-card-actions .note-action-btn {
+            width:28px; height:28px; border-radius:6px;
+            border:none; cursor:pointer;
+            transition:background 0.15s;
+            display:flex; align-items:center; justify-content:center;
+            font-size:14px;
+        }
+        .note-card-fav {
+            background:rgba(245,158,11,0.1); color:#94a3b8;
+        }
+        .note-card-fav:hover { background:rgba(245,158,11,0.2); color:#fbbf24; }
+        .note-card-fav.favorited { opacity:1 !important; color:#fbbf24; background:rgba(245,158,11,0.15); }
+        .note-card-delete {
+            background:rgba(239,68,68,0.1); color:#f87171;
+        }
         .note-card-delete:hover { background:rgba(239,68,68,0.2); }
+        /* 收藏状态的按钮始终显示 */
+        .note-card .note-card-actions:has(.favorited) { opacity:1; }
+        /* fallback: 给没有 :has 支持的浏览器用 JS 添加类 */
+        .note-card.has-fav .note-card-actions { opacity:1; }
 
         /* Custom confirm dialog */
         .confirm-overlay {

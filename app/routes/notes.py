@@ -2,7 +2,7 @@ import os
 import json
 import urllib.request
 import markdown
-from flask import Blueprint, render_template, request, flash, redirect, url_for, current_app
+from flask import Blueprint, render_template, request, flash, redirect, url_for, current_app, jsonify
 from flask_login import login_required, current_user
 from app import db
 from app.models import Note, LearningActivity, SystemConfig
@@ -184,7 +184,9 @@ def note_list():
     
     if folder:
         query = query.filter(Note.folder.like(f'%{folder}%'))
-    if category:
+    if category == 'favorite':
+        query = query.filter(Note.is_favorited == True)
+    elif category:
         query = query.filter(Note.category == category)
     
     notes = query.order_by(Note.updated_at.desc()).all()
@@ -205,9 +207,13 @@ def note_list():
     all_notes_for_count = base_query.all()
     total_count = len(all_notes_for_count)
     category_counts = {'__all__': total_count}
+    fav_count = 0
     for n in all_notes_for_count:
         cat = n.category or 'general'
         category_counts[cat] = category_counts.get(cat, 0) + 1
+        if n.is_favorited:
+            fav_count += 1
+    category_counts['favorite'] = fav_count
     
     return render_template('notes/list.html', notes=notes, folders=folders,
                            current_folder=folder, search=search,
@@ -304,6 +310,26 @@ def edit_note(note_id):
     folders = [f[0] for f in folders]
     
     return render_template('notes/edit.html', note=note, folders=folders, categories=CATEGORIES)
+
+
+@notes_bp.route('/<int:note_id>/toggle-favorite', methods=['POST'])
+@login_required
+def toggle_favorite(note_id):
+    note = Note.query.get_or_404(note_id)
+    if note.user_id != current_user.id:
+        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+            return jsonify({'ok': False, 'error': '无权操作'}), 403
+        flash('无权操作', 'error')
+        return redirect(url_for('notes.note_list'))
+    
+    note.is_favorited = not note.is_favorited
+    db.session.commit()
+    
+    if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+        return jsonify({'ok': True, 'is_favorited': note.is_favorited})
+    
+    flash('已' + ('收藏' if note.is_favorited else '取消收藏'), 'success')
+    return redirect(url_for('notes.note_list'))
 
 
 @notes_bp.route('/<int:note_id>/delete', methods=['POST'])
